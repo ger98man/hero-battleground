@@ -155,6 +155,16 @@ export async function postSystemMessage(text: string): Promise<void> {
   }
 }
 
+/** Game event to every connected player (e.g. the challenge list changed). Clients refetch on it. */
+export function broadcastEvent(payload: { type: string; [key: string]: unknown }) {
+  broadcast(payload);
+}
+
+/** Game event to all tabs of one player (e.g. their battle changed). */
+export function sendToUser(userId: number, payload: { type: string; [key: string]: unknown }) {
+  for (const ws of online.get(userId) ?? []) send(ws, payload);
+}
+
 export function onlineCount(): number {
   return online.size;
 }

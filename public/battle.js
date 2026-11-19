@@ -5,6 +5,33 @@ const dist = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 let battle = null;
 let selectedSkill = null;
 let busy = false;
+let clockOffset = 0; // server clock minus local clock, for the PvP turn timer
+
+const isPvp = () => battle?.mode === "pvp";
+
+/** Takes a fresh battle from the server. */
+function setBattle(b) {
+  const turnChanged = !battle || battle.state.turn !== b.state.turn || battle.state.round !== b.state.round;
+  battle = b;
+  if (b.serverNow) clockOffset = new Date(b.serverNow).getTime() - Date.now();
+  if (turnChanged) selectedSkill = null;
+}
+
+function secondsLeft() {
+  if (!battle?.turnDeadline) return null;
+  return Math.max(0, Math.ceil((new Date(battle.turnDeadline).getTime() - (Date.now() + clockOffset)) / 1000));
+}
+
+function renderRound() {
+  const s = battle.state;
+  const left = s.status === "active" ? secondsLeft() : null;
+  const whose = isPvp() && s.status === "active" ? (s.turn === "player" ? " · ваш ход" : " · ход соперника") : "";
+  const icon = (side) => (side === "player" ? battle.skills[0].icon : battle.botSkills[0].icon);
+  $("round").innerHTML = `<div>Раунд ${s.round}${whose}` +
+    (left === null ? "" : `<span class="turn-timer ${left <= 10 ? "low" : ""}">⏱ ${left} с</span>`) +
+    `</div><div class="queue" title="Очередь ходов по инициативе">${battle.queue
+      .map((side, i) => `<span class="q ${side} ${i === 0 ? "now" : ""}">${icon(side)}</span>`).join("")}</div>`;
+}
 
 async function api(path, body) {
   const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
@@ -44,8 +71,7 @@ function render() {
 
   $("panel-player").innerHTML = unitPanel(me);
   $("panel-bot").innerHTML = unitPanel(foe);
-  $("round").innerHTML = `<div>Раунд ${s.round}</div><div class="queue" title="Очередь ходов по инициативе">${battle.queue
-    .map((side, i) => `<span class="q ${side} ${i === 0 ? "now" : ""}">${unitIcon(side)}</span>`).join("")}</div>`;
+  renderRound();
 
   const reachable = new Set(battle.reachable.map(([x, y]) => `${x},${y}`));
   const obstacles = new Set(s.obstacles.map(([x, y]) => `${x},${y}`));
@@ -90,7 +116,7 @@ function render() {
   const talents = me.talents.length ? `Таланты: ${me.talents.length}` : "Без талантов";
   $("artifact-mini").innerHTML = `<span class="icon big">${unitIcon("player")}</span><div><b>${esc(me.className)}</b><div class="muted">${talents}</div></div>`;
 
-  $("hint").textContent = !myTurn ? "" : skill
+  $("hint").textContent = !myTurn ? (isPvp() && s.status === "active" ? "Ход соперника. Ждём его действий…" : "") : skill
     ? skill.target === "self" ? "" : `«${skill.name}»: кликните по противнику в красной зоне. Esc — отмена.`
     : `${me.movesLeft ? "Синие клетки — куда можно пойти. " : ""}Выберите умение (1–${battle.skills.length}), чтобы атаковать.`;
   $("end-turn").disabled = !myTurn || busy;
@@ -130,12 +156,13 @@ async function act(action) {
   $("error").textContent = "";
   try {
     const data = await api(`/api/battle/${battle.id}/action`, action);
-    battle = data.battle;
+    setBattle(data.battle);
     selectedSkill = null;
     render();
     playEvents(data.events);
   } catch (err) {
     $("error").textContent = err.message;
+    if (isPvp()) refresh();
   } finally {
     busy = false;
     $("end-turn").disabled = !(battle.state.status === "active" && battle.state.turn === "player");
@@ -187,7 +214,9 @@ $("surrender").onclick = () => {
 };
 
 function showResult() {
+  if (!$("result").classList.contains("hidden")) return;
   const won = battle.state.status === "won";
+  $("again").classList.toggle("hidden", isPvp());
   $("result-title").textContent = won ? "Победа!" : "Поражение";
   const r = battle.rewards;
   $("result-body").innerHTML = r
@@ -201,7 +230,7 @@ $("to-hero").onclick = () => location.assign("/hero");
 $("again").onclick = async () => {
   try {
     const data = await api("/api/battle", {});
-    battle = data.battle;
+    setBattle(data.battle);
     $("result").classList.add("hidden");
     render();
   } catch (err) {
@@ -213,6 +242,35 @@ $("again").onclick = async () => {
   const params = new URLSearchParams(location.search);
   const data = params.get("id") ? await api(`/api/battle/${params.get("id")}`) : await api("/api/battle/current");
   if (!data.battle) return location.assign("/hero");
-  battle = data.battle;
+  setBattle(data.battle);
   render();
 })();
+
+// PvP: the opponent's moves arrive as "battle" events over the chat socket; polling is the fallback.
+let refreshing = false;
+async function refresh() {
+  if (!battle || !isPvp() || refreshing) return;
+  refreshing = true;
+  try {
+    const data = await api(`/api/battle/${battle.id}`);
+    const before = JSON.stringify(battle.state);
+    setBattle(data.battle);
+    if (JSON.stringify(battle.state) !== before) render();
+  } catch {} finally {
+    refreshing = false;
+  }
+}
+
+window.addEventListener("hb:ws", (e) => {
+  if (e.detail.type === "battle" && battle && e.detail.battleId === battle.id) refresh();
+});
+
+setInterval(() => {
+  if (!battle || !isPvp() || battle.state.status !== "active") return;
+  renderRound();
+  // When time is up the server ends the turn within a couple of seconds.
+  if (secondsLeft() === 0) refresh();
+}, 1000);
+setInterval(() => {
+  if (battle && isPvp() && battle.state.status === "active" && battle.state.turn !== "player") refresh();
+}, 4000);

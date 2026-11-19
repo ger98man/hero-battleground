@@ -6,6 +6,7 @@ import { authRouter } from "./routes/auth.js";
 import { heroRouter } from "./routes/hero.js";
 import { classesRouter } from "./routes/classes.js";
 import { battleRouter } from "./routes/battle.js";
+import { challengesRouter } from "./routes/challenges.js";
 import { playersRouter } from "./routes/players.js";
 import { wikiRouter } from "./routes/wiki.js";
 import { pool } from "./db/pool.js";
@@ -28,12 +29,14 @@ export function createApp() {
   app.use("/api/wiki", wikiRouter);
   app.use("/api/classes", classesRouter);
   app.use("/api/battle", battleRouter);
+  app.use("/api/challenges", challengesRouter);
   app.use("/api", playersRouter);
 
   /** While the hero is in a battle, the battle is the main screen. */
   const hasActiveBattle = async (userId: number) => {
     const { rowCount } = await pool.query(
-      "SELECT 1 FROM battles b JOIN heroes h ON h.id = b.hero_id WHERE h.user_id = $1 AND b.status = 'active'",
+      `SELECT 1 FROM battles b JOIN heroes h ON (h.id = b.hero_id OR h.id = b.opponent_hero_id)
+        WHERE h.user_id = $1 AND b.status = 'active'`,
       [userId],
     );
     return Boolean(rowCount);
@@ -55,6 +58,11 @@ export function createApp() {
   app.get("/battle", (req, res) => {
     if (!req.session.userId) return res.redirect("/login");
     res.sendFile(path.join(publicDir, "battle.html"));
+  });
+  app.get("/pvp", async (req, res) => {
+    if (!req.session.userId) return res.redirect("/login");
+    if (await hasActiveBattle(req.session.userId)) return res.redirect("/battle");
+    res.sendFile(path.join(publicDir, "pvp.html"));
   });
   app.get("/heroes/:name", (req, res) => {
     if (!req.session.userId) return res.redirect("/login");
