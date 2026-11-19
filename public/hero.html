@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/social.css">
 </head>
 <body>
-<main>
+<main class="wide">
   <div class="row">
     <h1 id="hero-name">…</h1>
     <span>
@@ -16,24 +16,49 @@
       <button class="link" id="logout">Выйти</button>
     </span>
   </div>
-  <div class="card">
-    <div class="row">
-      <b id="level"></b>
-      <span class="muted" id="xp-text"></span>
+  <div class="hero-layout">
+    <div class="card">
+      <div class="row">
+        <b id="level"></b>
+        <span class="muted" id="xp-text"></span>
+      </div>
+      <div class="xp"><div id="xp-bar" style="width:0"></div></div>
+      <div class="stats">
+        <div class="stat"><span>Здоровье</span><b id="health"></b></div>
+        <div class="stat"><span>Атака</span><b id="attack"></b></div>
+        <div class="stat"><span>Защита</span><b id="defense"></b></div>
+        <div class="stat"><span>Скорость</span><b id="speed"></b></div>
+        <div class="stat"><span>Мана</span><b id="mana"></b></div>
+        <div class="stat"><span>Перемещение</span><b id="move"></b></div>
+        <div class="stat"><span>PvP: победы / поражения</span><b id="pvp"></b></div>
+        <div class="stat"><span>Бот: победы / поражения</span><b id="bot"></b></div>
+      </div>
+      <p class="muted">Зелёным показан бонус от артефакта. <span id="owner"></span></p>
+      <button type="button" id="fight" class="full">В бой против бота</button>
+      <div class="error" id="fight-error"></div>
+      <p class="muted">1×1, 2×2, 3×3 против игроков: скоро</p>
     </div>
-    <div class="xp"><div id="xp-bar" style="width:0"></div></div>
-    <div class="stats">
-      <div class="stat"><span>Здоровье</span><b id="health"></b></div>
-      <div class="stat"><span>Атака</span><b id="attack"></b></div>
-      <div class="stat"><span>Защита</span><b id="defense"></b></div>
-      <div class="stat"><span>Скорость</span><b id="speed"></b></div>
-      <div class="stat"><span>Победы</span><b id="wins"></b></div>
-      <div class="stat"><span>Поражения</span><b id="losses"></b></div>
+    <div class="card">
+      <div class="row">
+        <b>Артефакт</b>
+        <button type="button" class="link" id="change-artifact">Сменить</button>
+      </div>
+      <div id="artifact-panel"></div>
     </div>
-    <p class="muted" id="owner"></p>
-    <button type="button" disabled style="width:100%">В бой (скоро: 1×1, 2×2, 3×3)</button>
   </div>
 </main>
+
+<div class="modal hidden" id="artifact-modal">
+  <div class="modal-box">
+    <div class="row">
+      <h2 id="modal-title">Артефакты</h2>
+      <button type="button" class="link" id="modal-close">Закрыть</button>
+    </div>
+    <p class="muted" id="modal-hint"></p>
+    <div class="artifact-list" id="artifact-list"></div>
+    <div class="error" id="modal-error"></div>
+  </div>
+</div>
 <script src="/hero.js"></script>
 <script src="/online.js"></script>
 <script src="/chat.js"></script>
