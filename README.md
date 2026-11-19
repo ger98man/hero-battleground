@@ -11,6 +11,7 @@
 - `src/routes/auth.ts` — `POST /api/auth/register`, `/login`, `/logout`, `GET /api/auth/me`.
 - `src/routes/hero.ts` — `GET /api/hero`, герой текущего игрока.
 - `src/db/migrate.ts` — простой мигратор: применяет файлы `migrations/*.sql` по порядку и запоминает их в таблице `schema_migrations`.
+- `src/realtime/chat.ts` — WebSocket `/ws`: счётчик и список игроков онлайн, общий чат (сообщения в таблице `chat_messages`). Лимиты пока заглушки в `CHAT_LIMITS`. Онлайн считается в памяти процесса, поэтому рассчитано на один инстанс сервера.
 - `public/` — страницы `/login` и `/hero` (обычный HTML + JS, без фреймворка).
 
 Пароли хэшируются bcrypt. Сессии хранятся в PostgreSQL (таблица `user_sessions`), в браузере только httpOnly-cookie.
