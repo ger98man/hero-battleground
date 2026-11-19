@@ -27,15 +27,17 @@
   let connState = "";
 
   // Collapsed state is remembered per browser; small screens start collapsed.
+  // A page can set <body data-chat-start="collapsed"> (the battle screen) to always start collapsed.
   const KEY = "hb.chatCollapsed";
   let collapsed;
   try { collapsed = localStorage.getItem(KEY); } catch {}
-  setCollapsed(collapsed === null || collapsed === undefined ? innerWidth < 760 : collapsed === "1");
+  if (document.body.dataset.chatStart === "collapsed") setCollapsed(true, false);
+  else setCollapsed(collapsed === null || collapsed === undefined ? innerWidth < 760 : collapsed === "1");
   q(".chat-head").onclick = () => setCollapsed(!root.classList.contains("collapsed"));
 
-  function setCollapsed(on) {
+  function setCollapsed(on, remember = true) {
     root.classList.toggle("collapsed", on);
-    try { localStorage.setItem(KEY, on ? "1" : "0"); } catch {}
+    if (remember) try { localStorage.setItem(KEY, on ? "1" : "0"); } catch {}
     if (!on) { unread = 0; log.scrollTop = log.scrollHeight; }
     renderStatus();
   }

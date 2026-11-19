@@ -14,5 +14,7 @@
   document.title = `Hero Battleground — ${hero.name}`;
   $("hero-name").textContent = hero.name;
   $("level").textContent = `Уровень ${hero.level}`;
-  for (const key of ["health", "attack", "defense", "speed", "wins", "losses"]) $(key).textContent = hero[key];
+  for (const key of ["health", "attack", "defense", "speed"]) $(key).textContent = hero[key];
+  $("pvp").textContent = `${hero.wins} / ${hero.losses}`;
+  $("bot").textContent = `${hero.botWins} / ${hero.botLosses}`;
 })();
