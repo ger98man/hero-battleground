@@ -4,8 +4,10 @@ import { pool } from "../db/pool.js";
 import { requireAuth } from "../session.js";
 import {
   applyPlayerAction,
+  applySideAction,
   BattleError,
   createBattle,
+  other,
   reachableCells,
   skillBlocker,
   startBattle,
@@ -15,39 +17,75 @@ import {
   type BattleAction,
   type BattleEvent,
   type BattleState,
+  type Side,
 } from "../game/battle.js";
 import { randomBuild, simpleBot } from "../game/bot.js";
 import { combatProfile } from "../game/build.js";
 import { postSystemMessage } from "../realtime/chat.js";
 import { getHeroByUser, grantHeroBattleResult, type HeroRow } from "../services/heroes.js";
+import {
+  announcePvpResult,
+  applyTimeout,
+  BATTLE_COLUMNS,
+  heroInBattle,
+  notifyBattle,
+  openChallengeOf,
+  savePvp,
+  sideOf,
+  type BattleRow,
+  type PvpRewards,
+  type Rewards,
+} from "../services/pvp.js";
 
 export const battleRouter = Router();
 battleRouter.use(requireAuth);
 
-interface BattleRow {
-  id: number;
-  status: string;
-  state: BattleState;
-  rewards: Rewards | null;
-}
-
-interface Rewards {
-  experience: number;
-  levelsGained: number;
-}
 
 const BOT_NAMES = ["Тренировочный манекен", "Страж арены", "Безымянный наёмник", "Призрак арены"];
 
-/** What the client needs to draw the battle screen. */
-function battleView(row: BattleRow) {
-  const s = row.state;
+const flipStatus = (st: BattleState["status"]) => (st === "won" ? "lost" : st === "lost" ? "won" : st);
+
+/**
+ * The battle as seen by one side: the viewer is always `units.player`, and `status` is the
+ * viewer's result. In PvP the opponent of the challenge creator gets a mirrored copy.
+ */
+function asSeenBy(s: BattleState, side: Side): BattleState {
+  if (side === "player") return s;
+  const flip = <T>(r: Record<Side, T>): Record<Side, T> => ({ player: r.bot, bot: r.player });
+  return {
+    ...s,
+    units: { player: { ...s.units.bot, side: "player" }, bot: { ...s.units.player, side: "bot" } },
+    turn: other(s.turn),
+    nextTime: flip(s.nextTime),
+    tieFirst: other(s.tieFirst),
+    status: flipStatus(s.status),
+  };
+}
+
+function eventsSeenBy(events: BattleEvent[], side: Side): BattleEvent[] {
+  if (side === "player") return events;
+  return events.map((e) => {
+    if (e.type === "end") return { ...e, status: flipStatus(e.status) };
+    return "side" in e ? { ...e, side: other(e.side) } : e;
+  });
+}
+
+/** What the client needs to draw the battle screen, from the viewing hero's side. */
+function battleView(row: BattleRow, heroId: number) {
+  const side = sideOf(row, heroId);
+  const s = asSeenBy(row.state, side);
+  const rewards = row.mode === "pvp" ? ((row.rewards as PvpRewards | null)?.byHero[heroId] ?? null) : row.rewards;
   const player = s.units.player;
   const myTurn = s.status === "active" && s.turn === "player";
   return {
     id: row.id,
+    mode: row.mode,
     status: s.status,
-    rewards: row.rewards,
+    rewards,
     state: s,
+    /** PvP: when the current turn ends automatically (ISO), and the server clock to correct for drift. */
+    turnDeadline: row.turn_deadline ? row.turn_deadline.toISOString() : null,
+    serverNow: new Date().toISOString(),
     queue: s.status === "active" ? turnQueue(s, 8) : [],
     skills: player.skills.map((id, i) => {
       const sk = unitSkill(id);
@@ -71,9 +109,12 @@ function battleView(row: BattleRow) {
 /** Old battles (before classes) cannot be shown. */
 const isCurrentFormat = (row: BattleRow) => row.state?.version === 2;
 
-async function sendBattle(res: Response, row: BattleRow, events: BattleEvent[] = []) {
-  res.json({ battle: battleView(row), events });
+function sendBattle(res: Response, row: BattleRow, heroId: number, events: BattleEvent[] = []) {
+  res.json({ battle: battleView(row, heroId), events: eventsSeenBy(events, sideOf(row, heroId)) });
 }
+
+/** Battles the hero takes part in, on either side. */
+const PARTICIPANT = "(b.hero_id = h.id OR b.opponent_hero_id = h.id)";
 
 /** Start a battle against a bot, or return the one already in progress. */
 battleRouter.post("/", async (req, res) => {
@@ -83,10 +124,14 @@ battleRouter.post("/", async (req, res) => {
     return;
   }
   const existing = await pool.query<BattleRow>(
-    "SELECT id::int, status, state, rewards FROM battles WHERE hero_id = $1 AND status = 'active'",
+    `SELECT ${BATTLE_COLUMNS} FROM battles b JOIN heroes h ON ${PARTICIPANT} WHERE h.id = $1 AND b.status = 'active'`,
     [hero.id],
   );
-  if (existing.rows[0]) return sendBattle(res, existing.rows[0]);
+  if (existing.rows[0]) return sendBattle(res, existing.rows[0], hero.id);
+  if (await openChallengeOf(pool, hero.id)) {
+    res.status(409).json({ error: "Сначала отмените свою заявку на PvP" });
+    return;
+  }
 
   if (!hero.build.classes.length) {
     res.status(400).json({ error: "Сначала выберите класс" });
@@ -102,36 +147,49 @@ battleRouter.post("/", async (req, res) => {
     },
   );
   const events = startBattle(state, simpleBot);
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query<BattleRow>(
-      "INSERT INTO battles (hero_id, state) VALUES ($1, $2) RETURNING id::int, status, state, rewards",
+    await client.query("BEGIN");
+    // Lock the hero so a PvP challenge cannot be created or joined at the same moment.
+    await client.query("SELECT id FROM heroes WHERE id = $1 FOR UPDATE", [hero.id]);
+    if ((await heroInBattle(client, hero.id)) || (await openChallengeOf(client, hero.id))) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "Бой уже идёт или открыта заявка на PvP" });
+      return;
+    }
+    const { rows } = await client.query<BattleRow>(
+      `INSERT INTO battles AS b (hero_id, state) VALUES ($1, $2) RETURNING ${BATTLE_COLUMNS}`,
       [hero.id, state],
     );
+    await client.query("COMMIT");
     res.status(201);
-    return sendBattle(res, rows[0], events);
+    return sendBattle(res, rows[0], hero.id, events);
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
     // Two clicks at once: the unique index keeps one active battle.
     if ((err as { code?: string }).code === "23505") {
       res.status(409).json({ error: "Бой уже идёт" });
       return;
     }
     throw err;
+  } finally {
+    client.release();
   }
 });
 
 /** Current active battle, or null. */
 battleRouter.get("/current", async (req, res) => {
-  const { rows } = await pool.query<BattleRow>(
-    `SELECT b.id::int, b.status, b.state, b.rewards FROM battles b JOIN heroes h ON h.id = b.hero_id
+  const { rows } = await pool.query<BattleRow & { viewer: number }>(
+    `SELECT ${BATTLE_COLUMNS}, h.id::int AS viewer FROM battles b JOIN heroes h ON ${PARTICIPANT}
       WHERE h.user_id = $1 AND b.status = 'active'`,
     [req.session.userId],
   );
-  res.json({ battle: rows[0] && isCurrentFormat(rows[0]) ? battleView(rows[0]) : null });
+  res.json({ battle: rows[0] && isCurrentFormat(rows[0]) ? battleView(rows[0], rows[0].viewer) : null });
 });
 
 battleRouter.get("/:id", async (req, res) => {
-  const { rows } = await pool.query<BattleRow>(
-    `SELECT b.id::int, b.status, b.state, b.rewards FROM battles b JOIN heroes h ON h.id = b.hero_id
+  const { rows } = await pool.query<BattleRow & { viewer: number }>(
+    `SELECT ${BATTLE_COLUMNS}, h.id::int AS viewer FROM battles b JOIN heroes h ON ${PARTICIPANT}
       WHERE b.id = $1 AND h.user_id = $2`,
     [Number(req.params.id) || 0, req.session.userId],
   );
@@ -139,7 +197,7 @@ battleRouter.get("/:id", async (req, res) => {
     res.status(404).json({ error: "Бой не найден" });
     return;
   }
-  return sendBattle(res, rows[0]);
+  return sendBattle(res, rows[0], rows[0].viewer);
 });
 
 function parseAction(req: Request): BattleAction | null {
@@ -172,7 +230,8 @@ battleRouter.post("/:id/action", async (req, res) => {
     await client.query("BEGIN");
     const hero = await getHeroByUser(req.session.userId!, client, true);
     const { rows } = await client.query<BattleRow>(
-      "SELECT id::int, status, state, rewards FROM battles WHERE id = $1 AND hero_id = $2 FOR UPDATE",
+      `SELECT ${BATTLE_COLUMNS} FROM battles b
+        WHERE b.id = $1 AND (b.hero_id = $2 OR b.opponent_hero_id = $2) FOR UPDATE`,
       [Number(req.params.id) || 0, hero?.id ?? 0],
     );
     const row = rows[0];
@@ -181,6 +240,8 @@ battleRouter.post("/:id/action", async (req, res) => {
       res.status(404).json({ error: "Бой не найден" });
       return;
     }
+
+    if (row.mode === "pvp") return await pvpAction(client, res, row, hero.id, action);
 
     let events: BattleEvent[];
     try {
@@ -211,7 +272,7 @@ battleRouter.post("/:id/action", async (req, res) => {
       const [winner, loser] = row.state.status === "won" ? [player, bot] : [bot, player];
       void postSystemMessage(`${winner.name} победил ${loser.name} (бой с ботом)`);
     }
-    return sendBattle(res, row, events);
+    return sendBattle(res, row, hero.id, events);
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     throw err;
@@ -219,6 +280,30 @@ battleRouter.post("/:id/action", async (req, res) => {
     client.release();
   }
 });
+
+/** PvP action inside the open transaction (battle row locked). Commits or rolls back. */
+async function pvpAction(client: PoolClient, res: Response, row: BattleRow, heroId: number, action: BattleAction) {
+  const events: BattleEvent[] = [];
+  // A turn that already ran out ends first, so a late click cannot act on the opponent's time.
+  const timedOut = await applyTimeout(client, row, events);
+  try {
+    events.push(...applySideAction(row.state, sideOf(row, heroId), action));
+  } catch (err) {
+    if (!(err instanceof BattleError)) throw err;
+    await client.query(timedOut ? "COMMIT" : "ROLLBACK");
+    if (timedOut) {
+      void notifyBattle(row);
+      if (row.state.status !== "active") announcePvpResult(row);
+    }
+    res.status(400).json({ error: timedOut ? "Время хода вышло" : err.message });
+    return;
+  }
+  await savePvp(client, row, action.type === "end_turn");
+  await client.query("COMMIT");
+  void notifyBattle(row);
+  if (row.state.status !== "active") announcePvpResult(row);
+  return sendBattle(res, row, heroId, events);
+}
 
 
 /** Hero XP and bot win/loss counter. */

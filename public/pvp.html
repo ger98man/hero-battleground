@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hero Battleground — PvP-заявки</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/social.css">
+</head>
+<body>
+<main class="wide">
+  <div class="row">
+    <h1>PvP 1×1: заявки на бой</h1>
+    <span>
+      <a class="link nav-link" href="/hero">Герой</a>
+      <a class="link" href="/wiki">Об игре</a>
+    </span>
+  </div>
+  <section class="card pvp-card" id="pvp-card">
+    <div class="row wrap">
+      <b id="my-level"></b>
+      <label class="check"><input type="checkbox" id="only-my-level" checked> Только мой уровень</label>
+    </div>
+    <p class="muted" id="pvp-rules"></p>
+    <div id="my-challenge"></div>
+    <button type="button" id="create-challenge">Создать заявку</button>
+    <div class="error" id="challenge-error"></div>
+    <ul class="challenge-list" id="challenge-list"></ul>
+    <p class="muted">2×2 и 3×3: скоро</p>
+  </section>
+</main>
+<script src="/challenges.js"></script>
+<script src="/online.js"></script>
+<script src="/chat.js"></script>
+</body>
+</html>

@@ -258,4 +258,18 @@ $("logout").onclick = async () => {
   [catalog, { hero }] = await Promise.all([api("/api/classes"), api("/api/hero")]);
   render();
   if (hero.needsClass) openClassModal();
+  checkOwnChallenge();
 })();
+
+// While your PvP challenge is open, bot battles are not available.
+async function checkOwnChallenge() {
+  const pvp = await fetch("/api/challenges").then((r) => r.json()).catch(() => null);
+  if (!pvp?.challenges?.some((ch) => ch.mine)) return;
+  $("fight").disabled = true;
+  $("fight-error").textContent = "Открыта ваша PvP-заявка: пока она ждёт соперника, бой с ботом недоступен.";
+}
+
+// Someone joined your PvP challenge: the battle starts right away.
+window.addEventListener("hb:ws", (e) => {
+  if (e.detail.type === "battle-start") location.assign("/battle");
+});

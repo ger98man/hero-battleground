@@ -38,6 +38,17 @@ export async function getHeroByUser(userId: number, db: Db = pool, forUpdate = f
   return hero;
 }
 
+export async function getHeroById(heroId: number, db: Db = pool, forUpdate = false): Promise<HeroRow | undefined> {
+  const { rows } = await db.query<HeroRow>(
+    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build
+       FROM heroes WHERE id = $1 ${forUpdate ? "FOR UPDATE" : ""}`,
+    [heroId],
+  );
+  const hero = rows[0];
+  if (hero) hero.build = parseBuild(hero.build);
+  return hero;
+}
+
 /** Everything the hero page shows: progress, build, derived stats, relic. */
 export function heroView(hero: HeroRow) {
   const b = hero.build;
@@ -69,8 +80,15 @@ export function heroView(hero: HeroRow) {
   };
 }
 
-/** Hero XP with level-ups and bot win/loss counters. Returns levels gained. */
-export async function grantHeroBattleResult(db: Db, hero: HeroRow, won: boolean, xp: number): Promise<number> {
+/** Hero XP with level-ups and win/loss counters (bot or PvP). Returns levels gained. */
+export async function grantHeroBattleResult(
+  db: Db,
+  hero: HeroRow,
+  won: boolean,
+  xp: number,
+  kind: "bot" | "pvp" = "bot",
+): Promise<number> {
+  const [winsCol, lossesCol] = kind === "pvp" ? ["wins", "losses"] : ["bot_wins", "bot_losses"];
   let level = hero.level;
   let experience = hero.experience + xp;
   let gained = 0;
@@ -80,7 +98,8 @@ export async function grantHeroBattleResult(db: Db, hero: HeroRow, won: boolean,
     gained += 1;
   }
   await db.query(
-    `UPDATE heroes SET level = $2, experience = $3, bot_wins = bot_wins + $4, bot_losses = bot_losses + $5 WHERE id = $1`,
+    `UPDATE heroes SET level = $2, experience = $3, ${winsCol} = ${winsCol} + $4, ${lossesCol} = ${lossesCol} + $5
+      WHERE id = $1`,
     [hero.id, level, experience, won ? 1 : 0, won ? 0 : 1],
   );
   return gained;

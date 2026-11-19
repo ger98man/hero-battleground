@@ -63,9 +63,13 @@ export interface Unit {
 }
 
 export type BattleStatus = "active" | "won" | "lost";
+/** "bot": the "bot" side is played by the AI. "pvp": both sides are players, "player" is the challenge creator. */
+export type BattleMode = "bot" | "pvp";
 
 export interface BattleState {
   version: 2;
+  /** Missing in bot battles saved before PvP existed: treated as "bot". */
+  mode?: BattleMode;
   width: number;
   height: number;
   obstacles: Cell[];
@@ -164,7 +168,7 @@ const turnLength = (u: Unit) => TURN_TIME / (1 + u.speedBonus);
  * Creates the battle. Higher Инициатива acts first (a tie is random).
  * If the bot goes first, call `startBattle` to play its opening turn.
  */
-export function createBattle(player: Fighter, bot: Fighter, rng: Rng = Math.random): BattleState {
+export function createBattle(player: Fighter, bot: Fighter, rng: Rng = Math.random, mode: BattleMode = "bot"): BattleState {
   const mid = Math.floor(GRID_HEIGHT / 2);
   const pi = player.profile.stats.initiative;
   const bi = bot.profile.stats.initiative;
@@ -172,6 +176,7 @@ export function createBattle(player: Fighter, bot: Fighter, rng: Rng = Math.rand
   const firstName = first === "player" ? player.name : bot.name;
   return {
     version: 2,
+    mode,
     width: GRID_WIDTH,
     height: GRID_HEIGHT,
     obstacles: OBSTACLES.map((c) => [...c] as Cell),
@@ -188,7 +193,7 @@ export function createBattle(player: Fighter, bot: Fighter, rng: Rng = Math.rand
     log: [
       `Бой начался: ${player.name} (${player.profile.className}) против ${bot.name} (${bot.profile.className}).`,
       `Инициатива ${pi} против ${bi}. Первым ходит ${firstName}.`,
-      first === "player" ? "Раунд 1. Ваш ход." : `Раунд 1. Ход: ${bot.name}.`,
+      first === "player" && mode !== "pvp" ? "Раунд 1. Ваш ход." : `Раунд 1. Ход: ${firstName}.`,
     ],
   };
 }
@@ -315,7 +320,12 @@ function finish(state: BattleState, events: BattleEvent[]): boolean {
   const { player, bot } = state.units;
   if (player.hp > 0 && bot.hp > 0) return false;
   state.status = bot.hp <= 0 ? "won" : "lost";
-  log(state, state.status === "won" ? `${bot.name} повержен. Победа!` : `${player.name} пал. Поражение.`);
+  if (state.mode === "pvp") {
+    const [winner, loser] = state.status === "won" ? [player, bot] : [bot, player];
+    log(state, `${loser.name} повержен. Победил ${winner.name}!`);
+  } else {
+    log(state, state.status === "won" ? `${bot.name} повержен. Победа!` : `${player.name} пал. Поражение.`);
+  }
   events.push({ type: "end", status: state.status });
   return true;
 }
@@ -504,7 +514,7 @@ function startTurn(state: BattleState, side: Side, events: BattleEvent[]): boole
   state.round = round;
   events.push({ type: "turn", side, round });
   const roundText = newRound ? `Раунд ${round}. ` : "";
-  log(state, side === "player" ? `${roundText}Ваш ход.` : `${roundText}Ход: ${u.name}.`);
+  log(state, side === "player" && state.mode !== "pvp" ? `${roundText}Ваш ход.` : `${roundText}Ход: ${u.name}.`);
 
   u.movesLeft = u.moveRange;
   u.actionUsed = false;
@@ -600,6 +610,57 @@ function advance(state: BattleState, botTurn: BotTurn, rng: Rng, events: BattleE
     if (state.status !== "active") return;
     if (canAct && next === "player") return;
     if (canAct) playBot(state, botTurn, rng, events);
+    if (state.status !== "active") return;
+    endTurn(state, next);
+  }
+}
+
+/**
+ * PvP: applies an action of `side` (both sides are players). On end_turn the initiative
+ * timeline moves on to the next side that can act. Mutates `state`, returns what happened.
+ */
+export function applySideAction(state: BattleState, side: Side, action: BattleAction, rng: Rng = Math.random): BattleEvent[] {
+  if (state.status !== "active") throw new BattleError("Бой уже закончен");
+  const events: BattleEvent[] = [];
+  if (action.type === "surrender") {
+    state.units[side].hp = 0;
+    log(state, `${state.units[side].name} сдаётся.`);
+    finish(state, events);
+    return events;
+  }
+  if (state.turn !== side) throw new BattleError("Сейчас не ваш ход");
+  switch (action.type) {
+    case "move":
+      doMove(state, side, action.x, action.y, rng, events);
+      return events;
+    case "skill":
+      doSkill(state, side, action.skillId, action.x, action.y, rng, events);
+      return events;
+    case "end_turn":
+      endTurn(state, side);
+      advancePvp(state, events);
+      return events;
+    default:
+      throw new BattleError("Неизвестное действие");
+  }
+}
+
+/** PvP: the side to move ran out of time, its turn ends automatically. */
+export function timeoutTurn(state: BattleState): BattleEvent[] {
+  if (state.status !== "active") return [];
+  const events: BattleEvent[] = [];
+  const side = state.turn;
+  log(state, `${state.units[side].name}: время хода вышло.`);
+  endTurn(state, side);
+  advancePvp(state, events);
+  return events;
+}
+
+/** PvP: runs the timeline (skipping stunned turns) until someone can act. */
+function advancePvp(state: BattleState, events: BattleEvent[]) {
+  for (let guard = 0; guard < 30 && state.status === "active"; guard++) {
+    const next = pickNext(state.nextTime, state.tieFirst);
+    if (startTurn(state, next, events)) return;
     if (state.status !== "active") return;
     endTurn(state, next);
   }
