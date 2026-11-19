@@ -5,6 +5,7 @@ import { sessionMiddleware } from "./session.js";
 import { authRouter } from "./routes/auth.js";
 import { heroRouter } from "./routes/hero.js";
 import { playersRouter } from "./routes/players.js";
+import { wikiRouter } from "./routes/wiki.js";
 import { pool } from "./db/pool.js";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
@@ -22,6 +23,7 @@ export function createApp() {
   app.use(sessionMiddleware);
   app.use("/api/auth", authRouter);
   app.use("/api/hero", heroRouter);
+  app.use("/api/wiki", wikiRouter);
   app.use("/api", playersRouter);
 
   app.get("/", (req, res) => res.redirect(req.session.userId ? "/hero" : "/login"));
@@ -37,6 +39,8 @@ export function createApp() {
     if (!req.session.userId) return res.redirect("/login");
     res.sendFile(path.join(publicDir, "profile.html"));
   });
+  // Game docs and changelog, open to everyone (no login needed).
+  app.get(["/wiki", "/wiki/:slug"], (_req, res) => res.sendFile(path.join(publicDir, "wiki.html")));
   app.use(express.static(publicDir, { index: false }));
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {
