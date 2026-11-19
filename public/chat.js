@@ -88,6 +88,8 @@
     ws.onopen = () => { connState = ""; retryMs = 1000; window.hbOnlineLive = true; renderStatus(); };
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
+      // Game events (challenge list, battle updates) for the page scripts.
+      window.dispatchEvent(new CustomEvent("hb:ws", { detail: msg }));
       if (msg.type === "hello") {
         log.replaceChildren();
         msg.history.forEach(addMessage);

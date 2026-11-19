@@ -67,7 +67,11 @@ async function load() {
 
   const cur = await fetch("/api/battle/current").then((r) => r.json());
   $("fight").textContent = cur.battle ? "Продолжить бой" : "В бой против бота";
-  $("fight").disabled = !a && !cur.battle;
+  // While your PvP challenge is open, bot battles are not available.
+  const pvp = cur.battle ? null : await fetch("/api/challenges").then((r) => r.json()).catch(() => null);
+  const ownChallenge = Boolean(pvp?.challenges?.some((ch) => ch.mine));
+  $("fight").disabled = (!a && !cur.battle) || ownChallenge;
+  $("fight-error").textContent = ownChallenge ? "Открыта ваша PvP-заявка: пока она ждёт соперника, бой с ботом недоступен." : "";
 
   if (hero.needsStarterArtifact) openModal(true);
 }
@@ -116,7 +120,12 @@ $("artifact-list").onclick = async (e) => {
   }
   if (craft) return openModal(false); // stay in the menu so the new artifact can be equipped
   $("artifact-modal").classList.add("hidden");
-  load();
+  // Someone joined your PvP challenge: the battle starts right away.
+window.addEventListener("hb:ws", (e) => {
+  if (e.detail.type === "battle-start") location.assign("/battle");
+});
+
+load();
 };
 
 $("change-artifact").onclick = () => openModal(false);
@@ -134,5 +143,10 @@ $("logout").onclick = async () => {
   await fetch("/api/auth/logout", { method: "POST" });
   location.assign("/login");
 };
+
+// Someone joined your PvP challenge: the battle starts right away.
+window.addEventListener("hb:ws", (e) => {
+  if (e.detail.type === "battle-start") location.assign("/battle");
+});
 
 load();

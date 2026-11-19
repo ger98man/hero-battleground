@@ -3,12 +3,14 @@ import assert from "node:assert/strict";
 import { ARTIFACTS, getArtifact } from "./artifacts.js";
 import {
   applyPlayerAction,
+  applySideAction,
   BattleError,
   createBattle,
   distance,
   hasLineOfSight,
   reachableCells,
   startBattle,
+  timeoutTurn,
   type BattleState,
   type Fighter,
 } from "./battle.js";
@@ -146,4 +148,40 @@ test("obstacles block line of sight", () => {
     () => applyPlayerAction(state, { type: "skill", skillId: "abyss_bolt", x: 6, y: 3 }, simpleBot),
     /препятствием/,
   );
+});
+
+test("pvp: sides alternate, nobody acts on the other's turn", () => {
+  const state = createBattle(fighter("A", "ash_blade", 1, 3), fighter("B", "ash_blade"), seeded(5), "pvp");
+  assert.equal(state.mode, "pvp");
+  assert.equal(state.turn, "player");
+  assert.ok(!state.log.some((l) => l.includes("Ваш ход")), "pvp log is neutral");
+  assert.throws(() => applySideAction(state, "bot", { type: "end_turn" }), /не ваш ход/);
+  applySideAction(state, "player", { type: "move", x: 3, y: 3 });
+  applySideAction(state, "player", { type: "end_turn" });
+  assert.equal(state.turn, "bot");
+  assert.equal(state.round, 1);
+  // The second player moves themselves: no AI turn was played.
+  assert.equal(state.units.bot.x, 8);
+  applySideAction(state, "bot", { type: "move", x: 6, y: 3 });
+  applySideAction(state, "bot", { type: "end_turn" });
+  assert.equal(state.turn, "player");
+  assert.equal(state.round, 2);
+});
+
+test("pvp: timeout passes the turn, surrender works for either side", () => {
+  const state = createBattle(fighter("A", "ash_blade", 1, 3), fighter("B", "ash_blade"), seeded(6), "pvp");
+  timeoutTurn(state);
+  assert.equal(state.turn, "bot");
+  assert.ok(state.log.some((l) => l.includes("время хода вышло")));
+  applySideAction(state, "bot", { type: "surrender" });
+  assert.equal(state.status, "won");
+  assert.ok(state.log.at(-1)!.includes("Победил A"));
+});
+
+test("pvp: a stunned side's turn is skipped", () => {
+  const state = createBattle(fighter("A", "ash_blade", 1, 3), fighter("B", "ash_blade"), seeded(7), "pvp");
+  state.units.bot.stunned = 1;
+  applySideAction(state, "player", { type: "end_turn" });
+  assert.equal(state.turn, "player");
+  assert.equal(state.round, 2);
 });

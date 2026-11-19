@@ -37,6 +37,16 @@ export async function getHeroByUser(userId: number, db: Db = pool, forUpdate = f
   return rows[0];
 }
 
+export async function getHeroById(heroId: number, db: Db = pool, forUpdate = false): Promise<HeroRow | undefined> {
+  const { rows } = await db.query<HeroRow>(
+    `SELECT id::int, name, level, experience, health, attack, defense, speed, wins, losses,
+            bot_wins, bot_losses, equipped_artifact
+       FROM heroes WHERE id = $1 ${forUpdate ? "FOR UPDATE" : ""}`,
+    [heroId],
+  );
+  return rows[0];
+}
+
 export async function ownedArtifacts(heroId: number, db: Db = pool): Promise<OwnedArtifact[]> {
   const { rows } = await db.query<{ artifact_id: string; level: number; experience: number }>(
     "SELECT artifact_id, level, experience FROM hero_artifacts WHERE hero_id = $1 ORDER BY acquired_at",
@@ -83,8 +93,15 @@ export function heroCombatStats(hero: HeroRow, artifactLevel: number) {
   return artifact ? combatStats(hero, artifact, artifactLevel) : null;
 }
 
-/** Hero XP with level-ups and bot win/loss counters. Returns levels gained. */
-export async function grantHeroBattleResult(db: Db, hero: HeroRow, won: boolean, xp: number): Promise<number> {
+/** Hero XP with level-ups and win/loss counters (bot or PvP). Returns levels gained. */
+export async function grantHeroBattleResult(
+  db: Db,
+  hero: HeroRow,
+  won: boolean,
+  xp: number,
+  kind: "bot" | "pvp" = "bot",
+): Promise<number> {
+  const [winsCol, lossesCol] = kind === "pvp" ? ["wins", "losses"] : ["bot_wins", "bot_losses"];
   let level = hero.level;
   let experience = hero.experience + xp;
   let gained = 0;
@@ -96,7 +113,7 @@ export async function grantHeroBattleResult(db: Db, hero: HeroRow, won: boolean,
   await db.query(
     `UPDATE heroes SET level = $2, experience = $3,
             health = health + $4, attack = attack + $5, defense = defense + $6, speed = speed + $7,
-            bot_wins = bot_wins + $8, bot_losses = bot_losses + $9
+            ${winsCol} = ${winsCol} + $8, ${lossesCol} = ${lossesCol} + $9
       WHERE id = $1`,
     [
       hero.id, level, experience,
