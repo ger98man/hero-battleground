@@ -2,7 +2,6 @@ import { Router, type Request, type Response } from "express";
 import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../session.js";
-import { ARTIFACT_DROP_CHANCE, ARTIFACTS, getArtifact, SHARDS_PER_WIN } from "../game/artifacts.js";
 import {
   applyPlayerAction,
   BattleError,
@@ -10,24 +9,17 @@ import {
   reachableCells,
   skillBlocker,
   startBattle,
-  unitArtifact,
+  turnQueue,
+  unitSkill,
   visibleCells,
   type BattleAction,
   type BattleEvent,
   type BattleState,
 } from "../game/battle.js";
-import { simpleBot } from "../game/bot.js";
+import { randomBuild, simpleBot } from "../game/bot.js";
+import { combatProfile } from "../game/build.js";
 import { postSystemMessage } from "../realtime/chat.js";
-import { baseStatsForLevel, combatStats } from "../game/stats.js";
-import {
-  addShards,
-  getHeroByUser,
-  grantArtifactExperience,
-  grantHeroBattleResult,
-  heroCombatStats,
-  ownedArtifacts,
-  type HeroRow,
-} from "../services/heroes.js";
+import { getHeroByUser, grantHeroBattleResult, type HeroRow } from "../services/heroes.js";
 
 export const battleRouter = Router();
 battleRouter.use(requireAuth);
@@ -42,9 +34,6 @@ interface BattleRow {
 interface Rewards {
   experience: number;
   levelsGained: number;
-  artifact: { id: string; name: string; experience: number; levelsGained: number };
-  droppedArtifact: { id: string; name: string } | null;
-  shards: { id: string; name: string; amount: number } | null;
 }
 
 const BOT_NAMES = ["Тренировочный манекен", "Страж арены", "Безымянный наёмник", "Призрак арены"];
@@ -53,28 +42,34 @@ const BOT_NAMES = ["Тренировочный манекен", "Страж ар
 function battleView(row: BattleRow) {
   const s = row.state;
   const player = s.units.player;
-  const playerArtifact = unitArtifact(player);
-  const botArtifact = unitArtifact(s.units.bot);
   const myTurn = s.status === "active" && s.turn === "player";
-  const brief = (a: typeof playerArtifact) => ({ id: a.id, name: a.name, className: a.className, icon: a.icon });
   return {
     id: row.id,
     status: s.status,
     rewards: row.rewards,
     state: s,
-    playerArtifact: brief(playerArtifact),
-    botArtifact: brief(botArtifact),
-    skills: playerArtifact.skills.map((sk) => ({
-      ...sk,
-      cooldownLeft: player.cooldowns[sk.id] ?? 0,
-      blocker: myTurn ? skillBlocker(player, sk) : "Сейчас не ваш ход",
-    })),
-    botSkills: botArtifact.skills.map((sk) => ({ id: sk.id, name: sk.name, icon: sk.icon })),
+    queue: s.status === "active" ? turnQueue(s, 8) : [],
+    skills: player.skills.map((id, i) => {
+      const sk = unitSkill(id);
+      return {
+        ...sk,
+        basic: i === 0,
+        cooldownLeft: player.cooldowns[sk.id] ?? 0,
+        blocker: myTurn ? skillBlocker(player, sk) : "Сейчас не ваш ход",
+      };
+    }),
+    botSkills: s.units.bot.skills.map((id) => {
+      const sk = unitSkill(id);
+      return { id: sk.id, name: sk.name, icon: sk.icon };
+    }),
     reachable: myTurn ? [...reachableCells(s, "player").keys()].map((k) => k.split(",").map(Number)) : [],
     /** Cells the player can target from the current position (line of sight). */
     visible: myTurn ? visibleCells(s, "player") : [],
   };
 }
+
+/** Old battles (before classes) cannot be shown. */
+const isCurrentFormat = (row: BattleRow) => row.state?.version === 2;
 
 async function sendBattle(res: Response, row: BattleRow, events: BattleEvent[] = []) {
   res.json({ battle: battleView(row), events });
@@ -93,22 +88,17 @@ battleRouter.post("/", async (req, res) => {
   );
   if (existing.rows[0]) return sendBattle(res, existing.rows[0]);
 
-  const owned = await ownedArtifacts(hero.id);
-  const artifactLevel = owned.find((o) => o.artifactId === hero.equipped_artifact)?.level ?? 1;
-  const stats = heroCombatStats(hero, artifactLevel);
-  if (!stats || !hero.equipped_artifact) {
-    res.status(400).json({ error: "Сначала выберите артефакт" });
+  if (!hero.build.classes.length) {
+    res.status(400).json({ error: "Сначала выберите класс" });
     return;
   }
-  const botArtifact = ARTIFACTS[Math.floor(Math.random() * ARTIFACTS.length)];
   const state = createBattle(
-    { name: hero.name, level: hero.level, artifactId: hero.equipped_artifact, stats },
+    { name: hero.name, level: hero.level, profile: combatProfile(hero.level, hero.build) },
     {
       name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
+      // The bot has the same level and a random legal build.
       level: hero.level,
-      artifactId: botArtifact.id,
-      // The bot gets the same hero level and artifact level as the player.
-      stats: combatStats(baseStatsForLevel(hero.level), botArtifact, artifactLevel),
+      profile: combatProfile(hero.level, randomBuild(hero.level)),
     },
   );
   const events = startBattle(state, simpleBot);
@@ -136,7 +126,7 @@ battleRouter.get("/current", async (req, res) => {
       WHERE h.user_id = $1 AND b.status = 'active'`,
     [req.session.userId],
   );
-  res.json({ battle: rows[0] ? battleView(rows[0]) : null });
+  res.json({ battle: rows[0] && isCurrentFormat(rows[0]) ? battleView(rows[0]) : null });
 });
 
 battleRouter.get("/:id", async (req, res) => {
@@ -145,7 +135,7 @@ battleRouter.get("/:id", async (req, res) => {
       WHERE b.id = $1 AND h.user_id = $2`,
     [Number(req.params.id) || 0, req.session.userId],
   );
-  if (!rows[0]) {
+  if (!rows[0] || !isCurrentFormat(rows[0])) {
     res.status(404).json({ error: "Бой не найден" });
     return;
   }
@@ -186,7 +176,7 @@ battleRouter.post("/:id/action", async (req, res) => {
       [Number(req.params.id) || 0, hero?.id ?? 0],
     );
     const row = rows[0];
-    if (!hero || !row) {
+    if (!hero || !row || !isCurrentFormat(row)) {
       await client.query("ROLLBACK");
       res.status(404).json({ error: "Бой не найден" });
       return;
@@ -231,40 +221,10 @@ battleRouter.post("/:id/action", async (req, res) => {
 });
 
 
-/** Hero XP, artifact XP, bot win/loss counter, artifact drop and shards. */
+/** Hero XP and bot win/loss counter. */
 async function grantRewards(client: PoolClient, hero: HeroRow, state: BattleState): Promise<Rewards> {
   const won = state.status === "won";
   const experience = won ? 30 + 10 * state.units.bot.level : 10;
   const levelsGained = await grantHeroBattleResult(client, hero, won, experience);
-  const artifactId = state.units.player.artifactId;
-  const artifactLevels = await grantArtifactExperience(client, hero.id, artifactId, experience);
-  const rewards: Rewards = {
-    experience,
-    levelsGained,
-    artifact: { id: artifactId, name: getArtifact(artifactId)?.name ?? artifactId, experience, levelsGained: artifactLevels },
-    droppedArtifact: null,
-    shards: null,
-  };
-  if (!won) return rewards;
-
-  const owned = new Set((await ownedArtifacts(hero.id, client)).map((o) => o.artifactId));
-  const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
-  if (Math.random() < ARTIFACT_DROP_CHANCE) {
-    const drop = pick(ARTIFACTS.filter((a) => !owned.has(a.id)));
-    if (drop) {
-      await client.query(
-        "INSERT INTO hero_artifacts (hero_id, artifact_id, source) VALUES ($1, $2, 'drop') ON CONFLICT DO NOTHING",
-        [hero.id, drop.id],
-      );
-      owned.add(drop.id);
-      rewards.droppedArtifact = { id: drop.id, name: drop.name };
-    }
-  }
-  const shardTarget = pick(ARTIFACTS.filter((a) => !owned.has(a.id)));
-  if (shardTarget) {
-    const amount = SHARDS_PER_WIN.min + Math.floor(Math.random() * (SHARDS_PER_WIN.max - SHARDS_PER_WIN.min + 1));
-    await addShards(client, hero.id, shardTarget.id, amount);
-    rewards.shards = { id: shardTarget.id, name: shardTarget.name, amount };
-  }
-  return rewards;
+  return { experience, levelsGained };
 }

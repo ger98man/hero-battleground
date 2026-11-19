@@ -1,37 +1,44 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../session.js";
-import { artifactBonuses, getArtifact } from "../game/artifacts.js";
-import { xpForNextLevel } from "../game/stats.js";
-import { artifactProgress, heroCombatStats, ownedArtifacts } from "../services/heroes.js";
+import { parseBuild, validateBuild } from "../game/build.js";
+import { getHeroByUser, heroView } from "../services/heroes.js";
 
 export const heroRouter = Router();
+heroRouter.use(requireAuth);
 
-heroRouter.get("/", requireAuth, async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT h.id::int, h.name, h.level, h.experience, h.health, h.attack, h.defense, h.speed,
-            h.wins, h.losses, h.bot_wins, h.bot_losses, h.equipped_artifact, h.created_at, u.username
-       FROM heroes h JOIN users u ON u.id = h.user_id
-      WHERE h.user_id = $1`,
-    [req.session.userId],
-  );
-  const hero = rows[0];
+heroRouter.get("/", async (req, res) => {
+  const hero = await getHeroByUser(req.session.userId!);
   if (!hero) {
     res.status(404).json({ error: "Герой не найден" });
     return;
   }
-  const owned = await ownedArtifacts(hero.id);
-  const equipped = owned.find((o) => o.artifactId === hero.equipped_artifact);
-  const artifact = getArtifact(hero.equipped_artifact);
-  res.json({
-    hero: {
-      ...hero,
-      experienceToNext: xpForNextLevel(hero.level),
-      artifact: artifact ? { ...artifact, currentBonuses: artifactBonuses(artifact, equipped?.level ?? 1) } : null,
-      artifactProgress: equipped ? artifactProgress(equipped) : null,
-      combat: heroCombatStats(hero, equipped?.level ?? 1),
-      ownedArtifacts: owned.map((o) => o.artifactId),
-      needsStarterArtifact: owned.length === 0,
-    },
-  });
+  const { rows } = await pool.query<{ username: string }>("SELECT username FROM users WHERE id = $1", [req.session.userId]);
+  res.json({ hero: { ...heroView(hero), username: rows[0]?.username } });
+});
+
+/** Save the whole build (classes, specs, talents, skill loadout). Free to change outside battle. */
+heroRouter.post("/build", async (req, res) => {
+  const build = parseBuild(req.body?.build);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const hero = await getHeroByUser(req.session.userId!, client, true);
+    if (!hero) throw new Error("hero not found");
+    const { rowCount } = await client.query("SELECT 1 FROM battles WHERE hero_id = $1 AND status = 'active'", [hero.id]);
+    const error = rowCount ? "Во время боя менять билд нельзя" : validateBuild(build, hero.level);
+    if (error) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error });
+      return;
+    }
+    await client.query("UPDATE heroes SET build = $2 WHERE id = $1", [hero.id, build]);
+    await client.query("COMMIT");
+    res.json({ hero: heroView({ ...hero, build }) });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 });

@@ -14,7 +14,9 @@
   document.title = `Hero Battleground — ${hero.name}`;
   $("hero-name").textContent = hero.name;
   $("level").textContent = `Уровень ${hero.level}`;
-  for (const key of ["health", "attack", "defense", "speed"]) $(key).textContent = hero[key];
+  const roman = ["", "I", "II", "III", "IV", "V"];
+  $("class-name").textContent = hero.className;
+  $("classes").textContent = hero.classes.map((c) => `${c.name} ${roman[c.rank] ?? c.rank}`).join(" + ") || "—";
   $("pvp").textContent = `${hero.wins} / ${hero.losses}`;
   $("bot").textContent = `${hero.botWins} / ${hero.botLosses}`;
 })();

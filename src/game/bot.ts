@@ -1,51 +1,91 @@
-import type { Skill } from "./artifacts.js";
+import type { Skill } from "./classes.js";
+import { CLASSES, TALENTS } from "./classes.js";
+import { classPoints, classSlots, talentSlots, validateBuild, type HeroBuild } from "./build.js";
 import {
   distance,
   hasLineOfSight,
   reachableCells,
   skillBlocker,
-  unitArtifact,
+  unitSkill,
   type BattleAction,
   type BattleState,
   type BotTurn,
+  type Rng,
+  type Unit,
 } from "./battle.js";
 
-/** Rough value of a skill against the current target, used to rank options. */
-function offensiveValue(skill: Skill): number {
+/** Random legal build for a bot of the given level (same rules as players). */
+export function randomBuild(level: number, rng: Rng = Math.random): HeroBuild {
+  const pick = <T>(list: readonly T[]) => list[Math.floor(rng() * list.length)];
+  const playable = CLASSES.filter((c) => c.playable);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const first = pick(playable);
+    const build: HeroBuild = { classes: [{ id: first.id, rank: 1, spec: pick(first.specs).id }], talents: [], loadout: [] };
+    for (let p = 1; p < classPoints(level); p++) {
+      const free = playable.filter((c) => !build.classes.some((b) => b.id === c.id));
+      if (build.classes.length < classSlots(level) && free.length && rng() < 0.5) {
+        const c = pick(free);
+        build.classes.push({ id: c.id, rank: 1, spec: pick(c.specs).id });
+      } else {
+        const growable = build.classes.filter((c) => c.rank < 5);
+        if (growable.length) pick(growable).rank += 1;
+      }
+    }
+    const talents = [...TALENTS].sort(() => rng() - 0.5);
+    for (const t of talents) {
+      if (build.talents.length >= talentSlots(level)) break;
+      if (t.group && build.talents.some((id) => TALENTS.find((x) => x.id === id)?.group === t.group)) continue;
+      build.talents.push(t.id);
+    }
+    if (!validateBuild(build, level)) return build;
+  }
+  return { classes: [{ id: "warrior", rank: 1, spec: "warrior_shield" }], talents: [], loadout: [] };
+}
+
+/** Rough value of an offensive skill against the current target. */
+function offensiveValue(skill: Skill, foe: Unit): number {
   let v = 0;
   for (const e of skill.effects) {
-    if (e.type === "damage") v += e.power;
+    if (e.type === "damage") v += e.power * (e.hits ?? 1) + (e.executeBelow && foe.hp / foe.maxHp < e.executeBelow ? e.power : 0);
     if (e.type === "dot") v += e.power * e.turns * 0.8;
-    if (e.type === "stun") v += 1.5;
+    if (e.type === "stun" && foe.armor[e.gate].current === 0 && foe.stunImmune === 0) v += 2;
   }
   return v;
 }
 
+/** Whether a self skill is worth using now. */
+function defensiveNeed(skill: Skill, me: Unit): boolean {
+  return skill.effects.some((e) => {
+    if (e.type === "heal") return me.hp / me.maxHp < 0.5;
+    if (e.type === "armor") {
+      const types = e.armor === "both" ? (["physical", "magic"] as const) : [e.armor];
+      return types.some((t) => me.armor[t].max > 0 && me.armor[t].current / me.armor[t].max < 0.4);
+    }
+    return false;
+  });
+}
+
 /**
- * Simple bot: heal/shield when low, otherwise use the strongest skill in range,
+ * Simple bot: restore armor / heal when low, otherwise use the strongest skill in range,
  * walking towards the player first if nothing reaches.
  */
 export const simpleBot: BotTurn = (state: BattleState, act: (a: BattleAction) => void) => {
   const me = state.units.bot;
   const foe = state.units.player;
-  const skills = unitArtifact(me).skills;
+  const skills = me.skills.map(unitSkill);
 
   const usable = (s: Skill) => skillBlocker(me, s) === null;
   const inRange = (s: Skill) =>
     s.target === "self" || (distance(me.x, me.y, foe.x, foe.y) <= s.range && hasLineOfSight(state, me.x, me.y, foe.x, foe.y));
-  const isOffensive = (s: Skill) => s.target === "enemy";
-  const isDefensive = (s: Skill) => s.target === "self";
 
   const useBest = () => {
     for (let i = 0; i < 4 && state.status === "active"; i++) {
-      const low = me.hp / me.maxHp < 0.4;
       const candidates = skills
         .filter((s) => usable(s) && inRange(s))
-        .filter((s) => isOffensive(s) || (low && !me.shield) || (low && s.effects.some((e) => e.type === "heal")))
+        .filter((s) => s.target === "enemy" || defensiveNeed(s, me))
         .sort((a, b) => {
-          // Defensive first when low; then strongest; prefer bonus actions not to waste the main one.
-          if (low && isDefensive(a) !== isDefensive(b)) return isDefensive(a) ? -1 : 1;
-          return offensiveValue(b) - offensiveValue(a);
+          if ((a.target === "self") !== (b.target === "self")) return a.target === "self" ? -1 : 1;
+          return offensiveValue(b, foe) - offensiveValue(a, foe);
         });
       const pick = candidates[0];
       if (!pick) return;
@@ -54,11 +94,9 @@ export const simpleBot: BotTurn = (state: BattleState, act: (a: BattleAction) =>
   };
 
   useBest();
-  if (state.status !== "active" || me.movesLeft <= 0) return;
+  if (state.status !== "active" || me.movesLeft <= 0 || me.stunned > 0) return;
 
-  // Move to the cell from which the best available offensive skill reaches the player,
-  // spending as few moves as possible; if none reaches, get as close as possible.
-  const offensive = skills.filter((s) => isOffensive(s) && usable(s));
+  const offensive = skills.filter((s) => s.target === "enemy" && usable(s));
   if (!offensive.length) return;
   const wantRange = Math.max(...offensive.map((s) => s.range));
   const reaches = (x: number, y: number) => distance(x, y, foe.x, foe.y) <= wantRange && hasLineOfSight(state, x, y, foe.x, foe.y);
