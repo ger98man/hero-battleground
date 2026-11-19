@@ -1,0 +1,44 @@
+{
+  "name": "hero-battleground",
+  "version": "0.1.0",
+  "description": "Browser PvP hero battleground",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "migrate": "node dist/db/migrate.js",
+    "migrate:dev": "tsx src/db/migrate.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ger98man/hero-battleground.git"
+  },
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/ger98man/hero-battleground/issues"
+  },
+  "homepage": "https://github.com/ger98man/hero-battleground#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "connect-pg-simple": "^10.0.0",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-session": "^1.19.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  }
+}

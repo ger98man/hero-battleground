@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hero Battleground — вход</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <h1>Hero Battleground</h1>
+  <div class="card">
+    <div class="tabs">
+      <button type="button" id="tab-login" class="active">Вход</button>
+      <button type="button" id="tab-register">Регистрация</button>
+    </div>
+    <form id="form">
+      <label for="username">Логин</label>
+      <input id="username" name="username" autocomplete="username" required>
+      <label for="password">Пароль</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <div id="hero-field" class="hidden">
+        <label for="heroName">Имя героя</label>
+        <input id="heroName" name="heroName">
+      </div>
+      <button type="submit" id="submit">Войти</button>
+      <div class="error" id="error"></div>
+    </form>
+  </div>
+</main>
+<script src="/login.js"></script>
+</body>
+</html>
