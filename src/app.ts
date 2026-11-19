@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { sessionMiddleware } from "./session.js";
 import { authRouter } from "./routes/auth.js";
 import { heroRouter } from "./routes/hero.js";
+import { artifactsRouter } from "./routes/artifacts.js";
+import { battleRouter } from "./routes/battle.js";
 import { pool } from "./db/pool.js";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
@@ -21,6 +23,8 @@ export function createApp() {
   app.use(sessionMiddleware);
   app.use("/api/auth", authRouter);
   app.use("/api/hero", heroRouter);
+  app.use("/api/artifacts", artifactsRouter);
+  app.use("/api/battle", battleRouter);
 
   app.get("/", (req, res) => res.redirect(req.session.userId ? "/hero" : "/login"));
   app.get("/login", (req, res) => {
@@ -30,6 +34,10 @@ export function createApp() {
   app.get("/hero", (req, res) => {
     if (!req.session.userId) return res.redirect("/login");
     res.sendFile(path.join(publicDir, "hero.html"));
+  });
+  app.get("/battle", (req, res) => {
+    if (!req.session.userId) return res.redirect("/login");
+    res.sendFile(path.join(publicDir, "battle.html"));
   });
   app.use(express.static(publicDir, { index: false }));
 
