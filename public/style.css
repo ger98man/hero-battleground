@@ -109,3 +109,26 @@ a.link { text-decoration: none; }
 .wiki blockquote { margin: 12px 0; padding: 8px 12px; border-left: 3px solid #5b7cfa; background: #15171c; color: #c9ccd3; }
 .wiki code { background: #15171c; padding: 1px 4px; border-radius: 4px; }
 .footer-links { text-align: center; margin-top: 16px; font-size: 14px; }
+
+/* Classes */
+.class-row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid #2d313a; }
+.class-row .grow { flex: 1; }
+.rank-btns { display: flex; gap: 6px; }
+.rank-btns button { width: 36px; padding: 6px 0; }
+select { background: #15171c; color: inherit; border: 1px solid #2d313a; border-radius: 6px; padding: 6px; margin: 4px 0; font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { background: #15171c; border: 1px solid #2d313a; padding: 6px 10px; font-size: 14px; }
+.locked { padding: 2px 0; }
+.skill-row input[type=checkbox] { width: auto; margin-top: 4px; }
+#stats, #derived { margin-top: 12px; }
+h1 small { font-size: 15px; font-weight: normal; }
+.armor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.bar.parmor div { background: #8a7a4a; }
+.bar.marmor div { background: #4a6a9a; }
+.float.armor { color: #e0c070; }
+.round { text-align: center; }
+.queue { display: flex; gap: 4px; margin-top: 4px; justify-content: center; }
+.queue .q { font-size: 16px; padding: 2px 4px; border-radius: 4px; border: 1px solid transparent; font-weight: normal; }
+.queue .q.player { border-color: #5b7cfa; }
+.queue .q.bot { border-color: #e05252; }
+.queue .q.now { background: #2d313a; }

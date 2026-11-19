@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ARTIFACTS, getArtifact } from "./artifacts.js";
 import {
   applyPlayerAction,
   BattleError,
@@ -9,11 +8,13 @@ import {
   hasLineOfSight,
   reachableCells,
   startBattle,
+  turnQueue,
+  unitSkill,
   type BattleState,
   type Fighter,
 } from "./battle.js";
-import { simpleBot } from "./bot.js";
-import { baseStatsForLevel, combatStats } from "./stats.js";
+import { randomBuild, simpleBot } from "./bot.js";
+import { combatProfile, type HeroBuild } from "./build.js";
 
 function seeded(seed: number) {
   return () => {
@@ -22,29 +23,41 @@ function seeded(seed: number) {
   };
 }
 
-function fighter(name: string, artifactId: string, level = 1, speedBonus = 0): Fighter {
-  const stats = combatStats(baseStatsForLevel(level), getArtifact(artifactId)!);
-  return { name, level, artifactId, stats: { ...stats, speed: stats.speed + speedBonus } };
+const build = (classes: [string, number, string][], talents: string[] = []): HeroBuild => ({
+  classes: classes.map(([id, rank, spec]) => ({ id, rank, spec })),
+  talents,
+  loadout: [],
+});
+
+function fighter(name: string, b: HeroBuild, level = 1, initiativeBonus = 0): Fighter {
+  const profile = combatProfile(level, b);
+  profile.stats.initiative += initiativeBonus;
+  profile.speedBonus = Math.min(0.15, Math.max(0, profile.stats.initiative - 10) * 0.01);
+  return { name, level, profile };
 }
+
+const WARRIOR = build([["warrior", 1, "warrior_shield"]]);
+const MAGE = build([["mage", 1, "mage_fire"]]);
+const MONK = build([["monk", 1, "monk_arts"]]);
 
 /** Naive player: walk towards the bot, use the strongest skill that reaches, end turn. */
 function playRound(state: BattleState, rng: () => number) {
   const me = state.units.player;
   const foe = state.units.bot;
-  const skills = getArtifact(me.artifactId)!.skills.filter((s) => s.target === "enemy");
   const tryAttack = () => {
-    for (const s of [...skills].reverse()) {
-      if (state.status !== "active") return;
-      if (distance(me.x, me.y, foe.x, foe.y) > s.range) continue;
+    for (const id of [...me.skills].reverse()) {
+      const s = unitSkill(id);
+      if (state.status !== "active" || state.turn !== "player") return;
+      if (s.target === "enemy" && distance(me.x, me.y, foe.x, foe.y) > s.range) continue;
       try {
-        applyPlayerAction(state, { type: "skill", skillId: s.id, x: foe.x, y: foe.y }, simpleBot, rng);
+        applyPlayerAction(state, { type: "skill", skillId: s.id, x: s.target === "self" ? me.x : foe.x, y: s.target === "self" ? me.y : foe.y }, simpleBot, rng);
       } catch (e) {
         if (!(e instanceof BattleError)) throw e;
       }
     }
   };
   tryAttack();
-  if (state.status === "active" && me.movesLeft > 0) {
+  if (state.status === "active" && me.movesLeft > 0 && me.stunned === 0) {
     let best: [number, number] | null = null;
     let bestD = distance(me.x, me.y, foe.x, foe.y);
     for (const key of reachableCells(state, "player").keys()) {
@@ -58,92 +71,107 @@ function playRound(state: BattleState, rng: () => number) {
   if (state.status === "active") applyPlayerAction(state, { type: "end_turn" }, simpleBot, rng);
 }
 
-test("every artifact has 4 skills with unique ids", () => {
-  const ids = new Set<string>();
-  for (const a of ARTIFACTS) {
-    assert.equal(a.skills.length, 4, a.id);
-    for (const s of a.skills) {
-      assert.ok(!ids.has(s.id), s.id);
-      ids.add(s.id);
-    }
-  }
-  assert.ok(ARTIFACTS.filter((a) => a.starter).length >= 2);
-});
-
 test("movement respects range and obstacles", () => {
-  const state = createBattle(fighter("A", "abyss_staff", 1, 1), fighter("B", "ash_blade"));
+  const state = createBattle(fighter("A", MAGE, 1, 1), fighter("B", WARRIOR));
   const reach = reachableCells(state, "player");
   for (const path of reach.values()) assert.ok(path.length <= state.units.player.moveRange);
   for (const [x, y] of state.obstacles) assert.ok(!reach.has(`${x},${y}`));
   assert.throws(() => applyPlayerAction(state, { type: "move", x: 9, y: 3 }, simpleBot), BattleError);
 });
 
-test("skills check range, action economy, mana and cooldown", () => {
+test("damage hits armor of its type first, then HP", () => {
   const rng = seeded(1);
-  const state = createBattle(fighter("A", "abyss_staff", 1, 1), fighter("B", "dawn_shield"));
+  const state = createBattle(fighter("A", MAGE, 1, 1), fighter("B", WARRIOR));
   const { player, bot } = state.units;
-  // Out of range at start (distance 7, range 5).
-  assert.throws(() => applyPlayerAction(state, { type: "skill", skillId: "abyss_fireball", x: bot.x, y: bot.y }, simpleBot, rng), /далеко/);
-  applyPlayerAction(state, { type: "move", x: 3, y: 3 }, simpleBot, rng);
+  applyPlayerAction(state, { type: "move", x: 4, y: 3 }, simpleBot, rng);
+  const magic = bot.armor.magic.current;
+  const phys = bot.armor.physical.current;
   const hp = bot.hp;
-  applyPlayerAction(state, { type: "skill", skillId: "abyss_fireball", x: bot.x, y: bot.y }, simpleBot, rng);
-  assert.ok(bot.hp < hp);
-  assert.equal(player.mana, player.maxMana - 30);
-  assert.equal(player.cooldowns.abyss_fireball, 2);
-  // Main action already used this turn.
-  assert.throws(() => applyPlayerAction(state, { type: "skill", skillId: "abyss_bolt", x: bot.x, y: bot.y }, simpleBot, rng), /Действие/);
-  // Bonus action is still available.
-  applyPlayerAction(state, { type: "skill", skillId: "abyss_mana_shield", x: player.x, y: player.y }, simpleBot, rng);
-  assert.ok(player.shield);
-  applyPlayerAction(state, { type: "end_turn" }, simpleBot, rng);
-  assert.equal(state.turn, "player");
-  assert.equal(state.round, 2);
-  assert.equal(player.cooldowns.abyss_fireball, 1);
+  applyPlayerAction(state, { type: "skill", skillId: "mage_fireball", x: bot.x, y: bot.y }, simpleBot, rng);
+  assert.ok(bot.armor.magic.current < magic, "magic armor took damage");
+  assert.equal(bot.armor.physical.current, phys, "physical armor untouched");
+  assert.equal(bot.hp, hp, "HP untouched while magic armor holds");
+  assert.equal(player.mana, player.maxMana - 25);
+  assert.throws(() => applyPlayerAction(state, { type: "skill", skillId: "mage_basic", x: bot.x, y: bot.y }, simpleBot, rng), /Действие/);
 });
 
-test("battles between all artifact pairs finish", () => {
-  for (const pa of ARTIFACTS) {
-    for (const ba of ARTIFACTS) {
-      const rng = seeded(pa.id.length * 31 + ba.id.length);
-      const state = createBattle(fighter("P", pa.id), fighter("B", ba.id), rng);
+test("stun only lands when the matching armor is broken, then gives immunity", () => {
+  const rng = () => 0.99; // no dodge/parry
+  const state = createBattle(fighter("A", WARRIOR, 1, 1), fighter("B", MAGE));
+  const { player, bot } = state.units;
+  player.x = bot.x - 1;
+  player.y = bot.y;
+  applyPlayerAction(state, { type: "skill", skillId: "warrior_bash", x: bot.x, y: bot.y }, simpleBot, rng);
+  if (bot.armor.physical.current > 0) assert.equal(bot.stunned, 0);
+  // Break physical armor and try again on the next turn.
+  bot.armor.physical.current = 0;
+  delete player.cooldowns.warrior_bash;
+  player.actionUsed = false;
+  applyPlayerAction(state, { type: "skill", skillId: "warrior_bash", x: bot.x, y: bot.y }, simpleBot, rng);
+  assert.equal(bot.stunned, 1);
+  applyPlayerAction(state, { type: "end_turn" }, simpleBot, rng);
+  // Bot skipped its turn and is now immune.
+  assert.equal(state.turn, "player");
+  assert.equal(bot.stunned, 0);
+  assert.ok(bot.stunImmune > 0);
+});
+
+test("initiative timeline: higher initiative acts first and sometimes twice", () => {
+  const fast = fighter("P", WARRIOR, 1, 15); // +15 initiative -> capped 15% speed
+  const state = createBattle(fast, fighter("B", WARRIOR));
+  assert.equal(state.turn, "player");
+  const queue = turnQueue(state, 16);
+  const playerTurns = queue.filter((s) => s === "player").length;
+  assert.ok(playerTurns > queue.length / 2, `player gets more turns: ${queue.join(",")}`);
+  assert.ok(queue.some((s, i) => i > 0 && s === "player" && queue[i - 1] === "player"), "an extra turn happens");
+});
+
+test("bot opening turn is played by startBattle", () => {
+  const state = createBattle(fighter("P", WARRIOR), fighter("B", WARRIOR, 1, 3));
+  assert.equal(state.turn, "bot");
+  const events = startBattle(state, simpleBot, seeded(3));
+  assert.ok(events.some((e) => e.type === "move" && e.side === "bot"));
+  assert.equal(state.turn, "player");
+});
+
+test("Оппортунист attacks an enemy leaving melee range", () => {
+  const state = createBattle(fighter("P", MONK, 4, 1), fighter("B", build([["warrior", 1, "warrior_twohand"]], ["opportunist"]), 4));
+  const { player, bot } = state.units;
+  player.x = bot.x - 1;
+  player.y = bot.y;
+  const hpBefore = player.hp + player.armor.physical.current;
+  const events = applyPlayerAction(state, { type: "move", x: player.x - 2, y: player.y }, simpleBot, () => 0.99);
+  assert.ok(events.some((e) => e.type === "reaction"));
+  assert.ok(player.hp + player.armor.physical.current < hpBefore);
+  assert.ok(bot.reactionUsed);
+});
+
+test("obstacles block line of sight", () => {
+  const state = createBattle(fighter("P", MAGE, 1, 1), fighter("B", WARRIOR));
+  state.obstacles = [[4, 3]];
+  assert.equal(hasLineOfSight(state, 2, 3, 6, 3), false);
+  assert.equal(hasLineOfSight(state, 2, 2, 6, 2), true);
+  assert.equal(hasLineOfSight(state, 3, 1, 6, 4), true); // only touches the corner
+  state.units.player.x = 2;
+  state.units.bot.x = 6;
+  assert.throws(() => applyPlayerAction(state, { type: "skill", skillId: "mage_basic", x: 6, y: 3 }, simpleBot), /препятствием/);
+});
+
+test("battles between random builds finish", () => {
+  for (const level of [1, 3, 6, 9, 12]) {
+    for (let seed = 1; seed <= 20; seed++) {
+      const rng = seeded(seed * 97 + level);
+      const state = createBattle(fighter("P", randomBuild(level, rng), level), fighter("B", randomBuild(level, rng), level), rng);
       startBattle(state, simpleBot, rng);
-      for (let i = 0; i < 60 && state.status === "active"; i++) playRound(state, rng);
-      assert.notEqual(state.status, "active", `${pa.id} vs ${ba.id} did not finish`);
+      for (let i = 0; i < 200 && state.status === "active"; i++) playRound(state, rng);
+      assert.notEqual(state.status, "active", `level ${level} seed ${seed} did not finish`);
     }
   }
 });
 
-test("surrender loses the battle", () => {
-  const state = createBattle(fighter("P", "ash_blade"), fighter("B", "ash_blade"));
+test("surrender works even on the bot's turn and ends the battle", () => {
+  const state = createBattle(fighter("P", WARRIOR), fighter("B", WARRIOR, 1, 3));
   applyPlayerAction(state, { type: "surrender" }, simpleBot);
   assert.equal(state.status, "lost");
   assert.throws(() => applyPlayerAction(state, { type: "end_turn" }, simpleBot), BattleError);
-});
-
-test("faster side acts first; bot opening turn is played by startBattle", () => {
-  const playerFirst = createBattle(fighter("P", "ash_blade", 1, 3), fighter("B", "ash_blade"));
-  assert.equal(playerFirst.turn, "player");
-  const botFirst = createBattle(fighter("P", "ash_blade"), fighter("B", "ash_blade", 1, 3));
-  assert.equal(botFirst.turn, "bot");
-  const events = startBattle(botFirst, simpleBot, seeded(3));
-  assert.ok(events.some((e) => e.type === "move" && e.side === "bot"));
-  assert.equal(botFirst.turn, "player");
-  assert.equal(botFirst.round, 1);
-  applyPlayerAction(botFirst, { type: "end_turn" }, simpleBot, seeded(4));
-  assert.equal(botFirst.round, 2);
-});
-
-test("obstacles block line of sight", () => {
-  const state = createBattle(fighter("P", "abyss_staff", 1, 1), fighter("B", "dawn_shield"));
-  state.obstacles = [[4, 3]];
-  assert.equal(hasLineOfSight(state, 2, 3, 6, 3), false);
-  assert.equal(hasLineOfSight(state, 2, 2, 6, 2), true);
-  // Touching an obstacle corner does not block.
-  assert.equal(hasLineOfSight(state, 3, 1, 6, 4), true); // only touches the corner
-  state.units.player.x = 2;
-  state.units.bot.x = 6;
-  assert.throws(
-    () => applyPlayerAction(state, { type: "skill", skillId: "abyss_bolt", x: 6, y: 3 }, simpleBot),
-    /препятствием/,
-  );
 });
