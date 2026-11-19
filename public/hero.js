@@ -67,24 +67,32 @@ async function saveBuild(build) {
 
 const cloneBuild = () => JSON.parse(JSON.stringify(hero.build));
 
+const STAT_ICONS = { strength: "✊", dexterity: "🪶", intellect: "📖", mastery: "🔮", initiative: "⏳", stamina: "🛡️" };
+
+function vitalBar(name, cls, value) {
+  return `<div class="vital"><span class="vital-name">${name}</span><div class="bar ${cls}"><div style="width:100%"></div><span>${value} / ${value}</span></div></div>`;
+}
+
 function render() {
   const h = hero;
   $("hero-name").textContent = h.name;
-  $("class-title").textContent = h.needsClass ? "" : h.className;
-  $("level").textContent = `Уровень ${h.level}`;
-  $("xp-text").textContent = `${h.experience} / ${h.experienceToNext} опыта`;
+  $("class-title").textContent = h.needsClass ? "Класс не выбран" : h.className;
+  $("portrait-icon").textContent = h.build.classes[0] ? classDef(h.build.classes[0].id).icon : "⚔️";
+  $("level").textContent = `Ур. ${h.level}`;
+  $("xp-text").textContent = `${h.experience} / ${h.experienceToNext}`;
   $("xp-bar").style.width = `${Math.min(100, (h.experience / h.experienceToNext) * 100)}%`;
   $("class-line").textContent = h.build.classes.map((c) => `${classDef(c.id).name} ${ROMAN[c.rank]}`).join(" + ");
   const p = h.profile;
   $("stats").innerHTML = p
-    ? Object.entries(catalog.statNames).map(([k, name]) => `<div class="stat" title="${esc(STAT_HINTS[k])}"><span>${name}</span><b>${p.stats[k]}</b></div>`).join("")
+    ? Object.entries(catalog.statNames).map(([k, name]) => `<div class="stat-row" title="${esc(STAT_HINTS[k])}">
+        <span class="stat-icon">${STAT_ICONS[k] ?? "•"}</span><span class="stat-name">${name}</span><b>${p.stats[k]}</b></div>`).join("")
+    : `<p class="muted">Выберите класс, чтобы увидеть характеристики.</p>`;
+  $("vitals").innerHTML = p
+    ? vitalBar("Здоровье", "hp", p.maxHp) + vitalBar("Физическая броня", "parmor", p.physicalArmor) +
+      vitalBar("Магическая броня", "marmor", p.magicArmor) + vitalBar("Мана", "mana", p.maxMana)
     : "";
   $("derived").innerHTML = p
     ? [
-        ["Здоровье", p.maxHp],
-        ["Мана", p.maxMana],
-        ["Физ. броня", p.physicalArmor],
-        ["Маг. броня", p.magicArmor],
         ["Перемещение", `${p.moveRange} кл.`],
         ["Скорость ходов", `+${Math.round(p.speedBonus * 100)}%`],
         ["Уклонение", `${Math.round(p.dodge * 100)}%`],
@@ -165,9 +173,15 @@ function talentsTab() {
 function relicTab() {
   const r = hero.relic;
   if (!r) return "";
-  return `<div class="artifact-head"><span class="icon big">🗝️</span><div><b>${esc(r.name)}</b> <span class="muted">ступень ${r.tier}</span>
-    <div class="muted">Всегда с героем, не теряется. Свойства зависят от ваших классов.</div></div></div>
-    <p>${esc(r.effect)}</p>${r.nextTiers.map((t) => `<div class="muted">${esc(t)}</div>`).join("")}`;
+  const maxTier = r.tier + r.nextTiers.length;
+  const pips = Array.from({ length: maxTier }, (_, i) => `<span class="pip ${i < r.tier ? "on" : ""}"></span>`).join("");
+  return `<div class="relic"><div class="relic-art">🗡️</div><div class="relic-info">
+    <div class="relic-kind">Личная реликвия · всегда с героем, не теряется</div>
+    <h3>${esc(r.name)}</h3>
+    <div class="pips" title="Ступень ${r.tier} из ${maxTier}">${pips}<span class="muted">ступень ${r.tier}</span></div>
+    <p class="relic-effect">${esc(r.effect)}</p>
+    ${r.nextTiers.map((t) => `<div class="relic-next">🔒 ${esc(t)}</div>`).join("")}
+    <p class="muted">Свойства зависят от ваших классов.</p></div></div>`;
 }
 
 $("tabs").onclick = (e) => {
@@ -247,11 +261,6 @@ $("fight").onclick = async () => {
   if (res.ok) return location.assign("/battle");
   $("fight-error").textContent = (await res.json().catch(() => ({}))).error || "Ошибка";
   $("fight").disabled = false;
-};
-
-$("logout").onclick = async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
-  location.assign("/login");
 };
 
 (async () => {

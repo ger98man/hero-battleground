@@ -4,13 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hero Battleground — вход</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/social.css">
 </head>
-<body>
-<main>
-  <h1>Hero Battleground</h1>
-  <div class="card">
+<body class="login-page">
+<main class="login">
+  <div class="logo">
+    <span class="logo-crest">⚜</span>
+    <h1><span>Hero</span><small>Battleground</small></h1>
+    <p class="tagline">Пошаговые бои героев 1×1, 2×2 и 3×3</p>
+  </div>
+  <div class="panel">
     <div class="tabs">
       <button type="button" id="tab-login" class="active">Вход</button>
       <button type="button" id="tab-register">Регистрация</button>
@@ -24,7 +31,7 @@
         <label for="heroName">Имя героя</label>
         <input id="heroName" name="heroName">
       </div>
-      <button type="submit" id="submit">Войти</button>
+      <button type="submit" id="submit" class="btn-primary">Войти</button>
       <div class="error" id="error"></div>
     </form>
   </div>

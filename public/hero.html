@@ -4,58 +4,70 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hero Battleground — герой</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/social.css">
 </head>
 <body>
-<main class="wide">
-  <div class="row">
-    <h1><span id="hero-name">…</span> <small class="muted" id="class-title"></small></h1>
-    <span>
-      <a class="link nav-link" href="/pvp">⚔️ PvP-заявки</a>
-      <a class="link" href="/wiki">Об игре</a>
-      <button class="link" id="logout">Выйти</button>
-    </span>
-  </div>
+<header class="topbar" id="topbar" data-page="hero"></header>
+<main class="page">
   <div class="hero-layout">
-    <div class="card">
-      <div class="row">
-        <b id="level"></b>
-        <span class="muted" id="xp-text"></span>
+    <section class="panel portrait-panel">
+      <div class="portrait"><span class="portrait-icon" id="portrait-icon">⚔️</span></div>
+      <div class="nameplate">
+        <h1 id="hero-name">…</h1>
+        <div class="class-title" id="class-title"></div>
+        <div class="level-plaque" id="level"></div>
+        <div class="class-line" id="class-line"></div>
       </div>
-      <div class="xp"><div id="xp-bar" style="width:0"></div></div>
-      <div class="muted" id="class-line"></div>
-      <div class="stats" id="stats"></div>
-      <div class="stats" id="derived"></div>
-      <div class="stats">
-        <div class="stat"><span>PvP: победы / поражения</span><b id="pvp"></b></div>
-        <div class="stat"><span>Бот: победы / поражения</span><b id="bot"></b></div>
+      <div class="xp-block">
+        <div class="row"><span class="muted">Опыт героя</span><span class="muted" id="xp-text"></span></div>
+        <div class="xp"><div id="xp-bar" style="width:0"></div></div>
       </div>
-      <button type="button" id="fight" class="full">В бой против бота</button>
-      <a class="button-link full" href="/pvp">⚔️ PvP 1×1: заявки на бой</a>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Характеристики</h2>
+      <div class="stat-list" id="stats"></div>
+      <div class="vitals" id="vitals"></div>
+      <div class="derived" id="derived"></div>
+    </section>
+
+    <section class="panel battle-panel">
+      <h2 class="panel-title">Сражения</h2>
+      <button type="button" id="fight" class="btn-fight">⚔ В бой с ботом</button>
+      <a class="btn-secondary full" href="/pvp">Арена: PvP-заявки 1×1</a>
       <div class="error" id="fight-error"></div>
-    </div>
-    <div class="card">
-      <div class="tabs" id="tabs">
-        <button type="button" data-tab="classes" class="active">Классы</button>
-        <button type="button" data-tab="skills">Умения</button>
-        <button type="button" data-tab="talents">Таланты</button>
-        <button type="button" data-tab="relic">Реликвия</button>
+      <div class="records">
+        <div class="record"><span>PvP</span><b id="pvp"></b><small>победы / поражения</small></div>
+        <div class="record"><span>Против ботов</span><b id="bot"></b><small>победы / поражения</small></div>
       </div>
-      <div id="tab-body"></div>
-      <div class="error" id="build-error"></div>
-    </div>
+    </section>
   </div>
+
+  <section class="panel build-panel">
+    <div class="tabs" id="tabs">
+      <button type="button" data-tab="classes" class="active">Классы</button>
+      <button type="button" data-tab="skills">Умения</button>
+      <button type="button" data-tab="talents">Таланты</button>
+      <button type="button" data-tab="relic">Реликвия</button>
+    </div>
+    <div id="tab-body"></div>
+    <div class="error" id="build-error"></div>
+  </section>
 </main>
 
 <div class="modal hidden" id="class-modal">
   <div class="modal-box">
-    <h2>Выберите базовый класс</h2>
+    <h2 class="panel-title">Выберите базовый класс</h2>
     <p class="muted">Класс определяет умения и характеристики. На 3-м уровне появится очко класса, на 6-м — второй класс (гибрид, например Воин + Монах = Паладин). Менять можно в любой момент вне боя.</p>
     <div class="artifact-list" id="class-list"></div>
     <div class="error" id="modal-error"></div>
   </div>
 </div>
+<script src="/topbar.js"></script>
 <script src="/hero.js"></script>
 <script src="/online.js"></script>
 <script src="/chat.js"></script>

@@ -13,7 +13,7 @@
   const { hero } = data;
   document.title = `Hero Battleground — ${hero.name}`;
   $("hero-name").textContent = hero.name;
-  $("level").textContent = `Уровень ${hero.level}`;
+  $("level").textContent = `Ур. ${hero.level}`;
   const roman = ["", "I", "II", "III", "IV", "V"];
   $("class-name").textContent = hero.className;
   $("classes").textContent = hero.classes.map((c) => `${c.name} ${roman[c.rank] ?? c.rank}`).join(" + ") || "—";

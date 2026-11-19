@@ -4,26 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hero Battleground — профиль героя</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/social.css">
 </head>
 <body>
-<main>
-  <div class="row">
-    <h1 id="hero-name">…</h1>
-    <a class="link" href="/hero">← Мой герой</a>
-  </div>
-  <div class="card" id="card">
-    <b id="level"></b>
-    <div class="stats">
-      <div class="stat"><span>Класс</span><b id="class-name"></b></div>
-      <div class="stat"><span>Ветки</span><b id="classes"></b></div>
-      <div class="stat"><span>PvP: победы / поражения</span><b id="pvp"></b></div>
-      <div class="stat"><span>Бот: победы / поражения</span><b id="bot"></b></div>
+<header class="topbar" id="topbar" data-page="profile"></header>
+<main class="page narrow">
+  <section class="panel profile" id="card">
+    <div class="portrait small"><span class="portrait-icon">🛡️</span></div>
+    <div class="nameplate">
+      <h1 id="hero-name">…</h1>
+      <div class="class-title" id="class-name"></div>
+      <div class="level-plaque" id="level"></div>
+      <div class="class-line" id="classes"></div>
     </div>
-  </div>
+    <div class="records">
+      <div class="record"><span>PvP</span><b id="pvp"></b><small>победы / поражения</small></div>
+      <div class="record"><span>Против ботов</span><b id="bot"></b><small>победы / поражения</small></div>
+    </div>
+  </section>
   <p class="error" id="error"></p>
 </main>
+<script src="/topbar.js"></script>
 <script src="/profile.js"></script>
 <script src="/online.js"></script>
 <script src="/chat.js"></script>
