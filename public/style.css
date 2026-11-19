@@ -22,26 +22,3 @@ form button[type=submit] { width: 100%; margin-top: 18px; }
 .muted { color: #9aa0ab; font-size: 13px; }
 .link { background: transparent; color: #9aa0ab; padding: 4px 0; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* Online counter + global chat */
-.topbar { display: flex; justify-content: flex-end; padding: 8px 16px; border-bottom: 1px solid #2d313a; }
-.topbar .link { color: #e8e8ea; font-weight: bold; padding: 0; }
-.online-list { position: absolute; right: 16px; top: 40px; z-index: 1; max-height: 300px; overflow-y: auto; min-width: 180px;
-  background: #1f2229; border: 1px solid #2d313a; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
-.online-list div { padding: 2px 0; }
-.layout { display: flex; gap: 24px; justify-content: center; align-items: flex-start; max-width: 900px; margin: 0 auto; padding: 0 16px; }
-.layout main { margin: 48px 0; padding: 0; flex: 0 1 420px; }
-.chat { flex: 0 1 400px; margin-top: 48px; display: flex; flex-direction: column; height: 480px; }
-.chat-log { list-style: none; margin: 12px 0; padding: 0; overflow-y: auto; flex: 1; font-size: 14px; }
-.chat-log li { padding: 3px 0; overflow-wrap: anywhere; }
-.chat-log time { color: #6b7180; font-size: 12px; margin-right: 6px; }
-.chat-log .author { color: #8ea4ff; cursor: pointer; }
-.chat-form { display: flex; gap: 8px; }
-.chat-form input { flex: 1; min-width: 0; }
-.chat-form button[type=submit] { flex: none; width: auto; margin: 0; padding: 10px 14px; }
-.chat .error { min-height: 0; margin-top: 6px; }
-@media (max-width: 760px) {
-  .layout { flex-direction: column; align-items: stretch; gap: 0; }
-  .layout main { margin: 24px 0; flex: none; }
-  .chat { margin: 0 0 24px; flex: none; height: 400px; }
-}

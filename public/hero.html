@@ -5,13 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hero Battleground — герой</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/social.css">
 </head>
 <body>
-<header class="topbar">
-  <span class="muted">Онлайн: <button class="link" id="online-count" title="Кто онлайн">…</button></span>
-</header>
-<div id="online-list" class="online-list hidden"></div>
-<div class="layout">
 <main>
   <div class="row">
     <h1 id="hero-name">…</h1>
@@ -35,17 +31,8 @@
     <button type="button" disabled style="width:100%">В бой (скоро: 1×1, 2×2, 3×3)</button>
   </div>
 </main>
-<aside class="card chat" id="chat">
-  <div class="row"><b>Общий чат</b><span class="muted" id="chat-status"></span></div>
-  <ol id="chat-log" class="chat-log"></ol>
-  <form id="chat-form" class="chat-form">
-    <input id="chat-input" maxlength="200" autocomplete="off" placeholder="Сообщение">
-    <button type="submit">➤</button>
-  </form>
-  <div class="error" id="chat-error"></div>
-</aside>
-</div>
 <script src="/hero.js"></script>
+<script src="/online.js"></script>
 <script src="/chat.js"></script>
 </body>
 </html>

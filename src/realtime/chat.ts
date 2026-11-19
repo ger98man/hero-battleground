@@ -6,7 +6,10 @@ import { sessionMiddleware } from "../session.js";
 
 /** Placeholder limits until game design settles them. */
 export const CHAT_LIMITS = {
-  historySize: 50,
+  /** Messages sent to a player when they open the page. */
+  historySize: 20,
+  /** Messages kept in the database per channel; older ones are deleted. */
+  storedPerChannel: 200,
   maxLength: 200,
   minIntervalMs: 2000,
 };
@@ -27,8 +30,10 @@ interface Client extends WebSocket {
 
 export interface ChatMessage {
   id: number;
-  heroName: string;
-  level: number;
+  kind: "user" | "system";
+  /** null for system messages. */
+  heroName: string | null;
+  level: number | null;
   text: string;
   createdAt: string;
 }
@@ -49,11 +54,7 @@ function broadcast(payload: unknown) {
 }
 
 function presence() {
-  const players = [...online.values()]
-    .map((sockets) => sockets.values().next().value!.player)
-    .map(({ heroName, level }) => ({ heroName, level }))
-    .sort((a, b) => a.heroName.localeCompare(b.heroName));
-  return { type: "presence", count: players.length, players };
+  return { type: "presence", count: online.size };
 }
 
 /** Coalesce join/leave bursts (page reloads) into one presence update. */
@@ -84,8 +85,8 @@ async function loadPlayer(userId: number): Promise<Player | undefined> {
 
 export async function chatHistory(channel = GLOBAL, limit = CHAT_LIMITS.historySize): Promise<ChatMessage[]> {
   const { rows } = await pool.query(
-    `SELECT m.id, h.name AS "heroName", h.level, m.body AS text, m.created_at AS "createdAt"
-       FROM chat_messages m JOIN heroes h ON h.user_id = m.user_id
+    `SELECT m.id, m.kind, h.name AS "heroName", h.level, m.body AS text, m.created_at AS "createdAt"
+       FROM chat_messages m LEFT JOIN heroes h ON h.user_id = m.user_id
       WHERE m.channel = $1
       ORDER BY m.id DESC
       LIMIT $2`,
@@ -106,19 +107,52 @@ async function postMessage(player: Player, raw: unknown): Promise<string | undef
   if (now - last < CHAT_LIMITS.minIntervalMs) return "Слишком часто, подождите немного";
   lastSentAt.set(player.userId, now);
 
+  // Refresh the level in case the hero levelled up since connecting.
+  const fresh = await loadPlayer(player.userId);
+  if (fresh) player.level = fresh.level;
+  await insertMessage(GLOBAL, player.userId, text, player.heroName, player.level);
+  return undefined;
+}
+
+async function insertMessage(
+  channel: string,
+  userId: number | null,
+  text: string,
+  heroName: string | null,
+  level: number | null,
+) {
   const { rows } = await pool.query<{ id: string; created_at: Date }>(
-    "INSERT INTO chat_messages (channel, user_id, body) VALUES ($1, $2, $3) RETURNING id, created_at",
-    [GLOBAL, player.userId, text],
+    `INSERT INTO chat_messages (channel, kind, user_id, body) VALUES ($1, $2, $3, $4)
+     RETURNING id, created_at`,
+    [channel, userId === null ? "system" : "user", userId, text],
   );
   const message: ChatMessage = {
     id: Number(rows[0].id),
-    heroName: player.heroName,
-    level: player.level,
+    kind: userId === null ? "system" : "user",
+    heroName,
+    level,
     text,
     createdAt: rows[0].created_at.toISOString(),
   };
   broadcast({ type: "message", message });
-  return undefined;
+  await pool.query(
+    `DELETE FROM chat_messages
+      WHERE channel = $1
+        AND id <= (SELECT id FROM chat_messages WHERE channel = $1 ORDER BY id DESC OFFSET $2 LIMIT 1)`,
+    [channel, CHAT_LIMITS.storedPerChannel],
+  );
+}
+
+/**
+ * Posts a system line to the global chat, e.g. "Торин победил Арвен".
+ * Never throws: chat problems must not break the caller (registration, battles).
+ */
+export async function postSystemMessage(text: string): Promise<void> {
+  try {
+    await insertMessage(GLOBAL, null, text, null, null);
+  } catch (err) {
+    console.error("system chat message failed", err);
+  }
 }
 
 export function onlineCount(): number {
@@ -194,8 +228,7 @@ async function onConnection(ws: Client, player: Player) {
   });
 
   try {
-    const { count, players } = presence();
-    send(ws, { type: "hello", limits: CHAT_LIMITS, history: await chatHistory(), count, players });
+    send(ws, { type: "hello", limits: CHAT_LIMITS, history: await chatHistory(), count: online.size });
   } catch (err) {
     console.error("chat history failed", err);
   }
