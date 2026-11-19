@@ -53,11 +53,10 @@
     $("challenge-list").innerHTML = others.length
       ? others.map((c) => {
           const same = c.level === data.myLevel;
-          const a = c.artifact;
           return `<li class="challenge ${same ? "" : "other-level"}">
-            <span class="icon">${a ? a.icon : "❔"}</span>
+            <span class="icon">⚔️</span>
             <div class="who"><a href="/heroes/${encodeURIComponent(c.heroName)}">${esc(c.heroName)} [${c.level}]</a>
-              <div class="muted">${a ? esc(a.className) + " · " : ""}осталось <span class="timer" data-exp="${c.expiresAt}">${left(c.expiresAt)}</span></div></div>
+              <div class="muted">${c.className ? esc(c.className) + " · " : ""}осталось <span class="timer" data-exp="${c.expiresAt}">${left(c.expiresAt)}</span></div></div>
             <button type="button" data-join="${c.id}" ${same && !busy && !data.inBattle ? "" : "disabled"}
               title="${same ? "" : `Только для героев ${c.level} уровня`}">Вступить</button></li>`;
         }).join("")

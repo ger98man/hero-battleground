@@ -5,16 +5,13 @@
  */
 import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
-import { getArtifact } from "../game/artifacts.js";
+import { combatProfile, overallClass, parseBuild } from "../game/build.js";
 import { createBattle, other, timeoutTurn, type BattleEvent, type BattleState, type Side } from "../game/battle.js";
 import { broadcastEvent, postSystemMessage, sendToUser } from "../realtime/chat.js";
 import {
   getHeroById,
   getHeroByUser,
-  grantArtifactExperience,
   grantHeroBattleResult,
-  heroCombatStats,
-  ownedArtifacts,
   type HeroRow,
 } from "./heroes.js";
 
@@ -39,9 +36,6 @@ export class PvpError extends Error {
 export interface Rewards {
   experience: number;
   levelsGained: number;
-  artifact: { id: string; name: string; experience: number; levelsGained: number };
-  droppedArtifact: { id: string; name: string } | null;
-  shards: { id: string; name: string; amount: number } | null;
 }
 
 /** PvP rewards are stored per hero: `{ byHero: { [heroId]: Rewards } }`. */
@@ -113,7 +107,8 @@ export interface ChallengeView {
   heroName: string;
   level: number;
   mode: string;
-  artifact: { icon: string; className: string } | null;
+  /** Overall class name of the hero (placeholder names until the owner approves them). */
+  className: string;
   createdAt: string;
   expiresAt: string;
   mine: boolean;
@@ -121,7 +116,7 @@ export interface ChallengeView {
 
 export async function listChallenges(viewerHeroId: number): Promise<ChallengeView[]> {
   const { rows } = await pool.query(
-    `SELECT c.id::int, h.name AS "heroName", c.level, c.mode, h.equipped_artifact AS "artifactId",
+    `SELECT c.id::int, h.name AS "heroName", c.level, c.mode, h.build,
             c.created_at AS "createdAt", c.expires_at AS "expiresAt", c.hero_id::int AS "heroId"
        FROM battle_challenges c JOIN heroes h ON h.id = c.hero_id
       WHERE c.status = 'open' AND c.expires_at > now()
@@ -129,13 +124,12 @@ export async function listChallenges(viewerHeroId: number): Promise<ChallengeVie
       LIMIT 200`,
   );
   return rows.map((r) => {
-    const a = getArtifact(r.artifactId);
     return {
       id: r.id,
       heroName: r.heroName,
       level: r.level,
       mode: r.mode,
-      artifact: a ? { icon: a.icon, className: a.className } : null,
+      className: overallClass(parseBuild(r.build)).name,
       createdAt: r.createdAt.toISOString(),
       expiresAt: r.expiresAt.toISOString(),
       mine: r.heroId === viewerHeroId,
@@ -163,7 +157,7 @@ export async function createChallenge(userId: number): Promise<number> {
     // Locking the hero row serializes this with starting a bot battle and joining challenges.
     const hero = await getHeroByUser(userId, client, true);
     if (!hero) throw new PvpError("Герой не найден", 404);
-    if (!hero.equipped_artifact) throw new PvpError("Сначала выберите артефакт");
+    if (!hero.build.classes.length) throw new PvpError("Сначала выберите класс");
     if (await heroInBattle(client, hero.id)) throw new PvpError("Вы уже в бою", 409);
     if (await openChallengeOf(client, hero.id)) throw new PvpError("У вас уже есть заявка", 409);
     await expireOld(client);
@@ -211,7 +205,7 @@ export async function joinChallenge(userId: number, challengeId: number): Promis
     // Lock both heroes in id order so two joins can never deadlock.
     const [first, second] = [joiner.id, c.hero_id].sort((a, b) => a - b);
     await client.query("SELECT id FROM heroes WHERE id = ANY($1) ORDER BY id FOR UPDATE", [[first, second]]);
-    // Re-read after locking: levels or artifacts may have changed meanwhile.
+    // Re-read after locking: levels or builds may have changed meanwhile.
     const me = (await getHeroById(joiner.id, client))!;
     const creator = await getHeroById(c.hero_id, client);
     if (!creator) throw new PvpError("Заявка уже закрыта", 409);
@@ -222,10 +216,10 @@ export async function joinChallenge(userId: number, challengeId: number): Promis
     if (await heroInBattle(client, me.id)) throw new PvpError("Вы уже в бою", 409);
     if (await heroInBattle(client, creator.id)) throw new PvpError("Создатель заявки сейчас в бою", 409);
 
-    const meStats = await fighterOf(client, me);
-    const creatorStats = await fighterOf(client, creator);
-    if (!meStats) throw new PvpError("Сначала выберите артефакт");
-    if (!creatorStats) throw new PvpError("У создателя заявки нет артефакта", 409);
+    const meStats = fighterOf(me);
+    const creatorStats = fighterOf(creator);
+    if (!meStats) throw new PvpError("Сначала выберите класс");
+    if (!creatorStats) throw new PvpError("У создателя заявки нет класса", 409);
 
     // Your own open challenge is closed when you join someone else's.
     await client.query(
@@ -252,12 +246,9 @@ export async function joinChallenge(userId: number, challengeId: number): Promis
   return result.battleId;
 }
 
-async function fighterOf(db: Db, hero: HeroRow) {
-  if (!hero.equipped_artifact) return null;
-  const owned = await ownedArtifacts(hero.id, db as PoolClient);
-  const level = owned.find((o) => o.artifactId === hero.equipped_artifact)?.level ?? 1;
-  const stats = heroCombatStats(hero, level);
-  return stats && { name: hero.name, level: hero.level, artifactId: hero.equipped_artifact, stats };
+function fighterOf(hero: HeroRow) {
+  if (!hero.build.classes.length) return null;
+  return { name: hero.name, level: hero.level, profile: combatProfile(hero.level, hero.build) };
 }
 
 async function expireOld(db: Db): Promise<number> {
@@ -269,7 +260,7 @@ async function expireOld(db: Db): Promise<number> {
 
 // ---------------------------------------------------------------- PvP battle flow
 
-/** XP for both heroes and their artifacts, PvP win/loss counters. No artifact drops or shards in PvP. */
+/** XP for both heroes and PvP win/loss counters. */
 export async function grantPvpRewards(client: PoolClient, row: BattleRow): Promise<PvpRewards> {
   const state = row.state;
   const winnerSide: Side = state.status === "won" ? "player" : "bot";
@@ -281,15 +272,7 @@ export async function grantPvpRewards(client: PoolClient, row: BattleRow): Promi
     const won = side === winnerSide;
     const experience = Math.round((won ? 30 + 10 * state.units[other(side)].level : 10) * PVP_RULES.experienceMultiplier);
     const levelsGained = await grantHeroBattleResult(client, hero, won, experience, "pvp");
-    const artifactId = state.units[side].artifactId;
-    const artifactLevels = await grantArtifactExperience(client, hero.id, artifactId, experience);
-    byHero[heroId] = {
-      experience,
-      levelsGained,
-      artifact: { id: artifactId, name: getArtifact(artifactId)?.name ?? artifactId, experience, levelsGained: artifactLevels },
-      droppedArtifact: null,
-      shards: null,
-    };
+    byHero[heroId] = { experience, levelsGained };
   }
   return { byHero };
 }

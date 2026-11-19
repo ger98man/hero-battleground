@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { sessionMiddleware } from "./session.js";
 import { authRouter } from "./routes/auth.js";
 import { heroRouter } from "./routes/hero.js";
-import { artifactsRouter } from "./routes/artifacts.js";
+import { classesRouter } from "./routes/classes.js";
 import { battleRouter } from "./routes/battle.js";
 import { challengesRouter } from "./routes/challenges.js";
 import { playersRouter } from "./routes/players.js";
@@ -27,7 +27,7 @@ export function createApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/hero", heroRouter);
   app.use("/api/wiki", wikiRouter);
-  app.use("/api/artifacts", artifactsRouter);
+  app.use("/api/classes", classesRouter);
   app.use("/api/battle", battleRouter);
   app.use("/api/challenges", challengesRouter);
   app.use("/api", playersRouter);

@@ -26,8 +26,11 @@ function renderRound() {
   const s = battle.state;
   const left = s.status === "active" ? secondsLeft() : null;
   const whose = isPvp() && s.status === "active" ? (s.turn === "player" ? " · ваш ход" : " · ход соперника") : "";
-  $("round").innerHTML = `Раунд ${s.round}${whose}` +
-    (left === null ? "" : `<span class="turn-timer ${left <= 10 ? "low" : ""}">⏱ ${left} с</span>`);
+  const icon = (side) => (side === "player" ? battle.skills[0].icon : battle.botSkills[0].icon);
+  $("round").innerHTML = `<div>Раунд ${s.round}${whose}` +
+    (left === null ? "" : `<span class="turn-timer ${left <= 10 ? "low" : ""}">⏱ ${left} с</span>`) +
+    `</div><div class="queue" title="Очередь ходов по инициативе">${battle.queue
+      .map((side, i) => `<span class="q ${side} ${i === 0 ? "now" : ""}">${icon(side)}</span>`).join("")}</div>`;
 }
 
 async function api(path, body) {
@@ -43,16 +46,22 @@ function bar(cur, max, cls, label) {
   return `<div class="bar ${cls}"><div style="width:${pct}%"></div><span>${label ?? `${cur} / ${max}`}</span></div>`;
 }
 
-function unitPanel(u, artifact) {
+function unitPanel(u) {
   const effects = [
-    u.shield ? `🛡️ щит ${u.shield.amount}` : null,
     u.stunned ? "💫 оглушён" : null,
+    u.stunImmune ? "🧿 устойчив к контролю" : null,
     ...u.dots.map((d) => `🔥 ${esc(d.name)} ${d.perTick}×${d.turns}`),
   ].filter(Boolean).join(" · ");
-  return `<div class="unit-name"><b>${esc(u.name)}</b> <span class="muted">ур. ${u.level} · ${artifact.icon} ${esc(artifact.className)}</span></div>
-    ${bar(u.hp, u.maxHp, "hp")}${bar(u.mana, u.maxMana, "mana")}
+  const pa = u.armor.physical;
+  const ma = u.armor.magic;
+  return `<div class="unit-name"><b>${esc(u.name)}</b> <span class="muted">ур. ${u.level} · ${esc(u.className)}</span></div>
+    ${bar(u.hp, u.maxHp, "hp", `❤️ ${u.hp} / ${u.maxHp}`)}
+    <div class="armor-row">${bar(pa.current, pa.max, "parmor", `🛡️ ${pa.current} / ${pa.max}`)}${bar(ma.current, ma.max, "marmor", `🔷 ${ma.current} / ${ma.max}`)}</div>
+    ${bar(u.mana, u.maxMana, "mana", `💧 ${u.mana} / ${u.maxMana}`)}
     <div class="muted effects">${effects || "&nbsp;"}</div>`;
 }
+
+const unitIcon = (side) => (side === "player" ? battle.skills[0].icon : battle.botSkills[0].icon);
 
 function render() {
   const s = battle.state;
@@ -60,8 +69,8 @@ function render() {
   const foe = s.units.bot;
   const myTurn = s.status === "active" && s.turn === "player";
 
-  $("panel-player").innerHTML = unitPanel(me, battle.playerArtifact);
-  $("panel-bot").innerHTML = unitPanel(foe, battle.botArtifact);
+  $("panel-player").innerHTML = unitPanel(me);
+  $("panel-bot").innerHTML = unitPanel(foe);
   renderRound();
 
   const reachable = new Set(battle.reachable.map(([x, y]) => `${x},${y}`));
@@ -78,8 +87,8 @@ function render() {
       const cls = ["cell"];
       let content = "";
       if (obstacles.has(key)) { cls.push("rock"); content = "🪨"; }
-      if (me.x === x && me.y === y) { cls.push("unit", "player"); content = battle.playerArtifact.icon; }
-      if (foe.x === x && foe.y === y) { cls.push("unit", "bot"); content = battle.botArtifact.icon; }
+      if (me.x === x && me.y === y) { cls.push("unit", "player"); content = unitIcon("player"); }
+      if (foe.x === x && foe.y === y) { cls.push("unit", "bot"); content = unitIcon("bot"); }
       if (myTurn && skill?.target === "enemy" && dist(me.x, me.y, x, y) <= skill.range && visible.has(key) && !obstacles.has(key)) cls.push("in-range");
       else if (myTurn && !skill && reachable.has(key)) cls.push("reach");
       html += `<div class="${cls.join(" ")}" data-x="${x}" data-y="${y}">${content}</div>`;
@@ -90,12 +99,13 @@ function render() {
   $("economy").innerHTML = [
     `<span class="${me.actionUsed ? "used" : ""}">🟢 Действие ${me.actionUsed ? 0 : 1}/1</span>`,
     `<span class="${me.bonusUsed ? "used" : ""}">🔷 Бонус ${me.bonusUsed ? 0 : 1}/1</span>`,
+    `<span class="${me.reactionUsed ? "used" : ""}" title="Реакция срабатывает в ход противника (например, талант «Оппортунист»)">🟣 Реакция ${me.reactionUsed ? 0 : 1}/1</span>`,
     `<span>👣 Ход ${me.movesLeft}/${me.moveRange}</span>`,
   ].join("");
 
   $("skillbar").innerHTML = battle.skills.map((k, i) => {
     const disabled = Boolean(k.blocker);
-    const title = `${k.name}: ${k.description}\n${k.cost === "bonus" ? "Бонусное действие" : "Действие"}, ${k.target === "self" ? "на себя" : `дальность ${k.range}`}, мана ${k.mana}${k.cooldown ? `, перезарядка ${k.cooldown}` : ""}${k.blocker ? `\n${k.blocker}` : ""}`;
+    const title = `${k.name}${k.basic ? " (обычная атака)" : ""}: ${k.description}\n${k.cost === "bonus" ? "Бонусное действие" : "Действие"}, ${k.target === "self" ? "на себя" : `дальность ${k.range}`}, мана ${k.mana}${k.cooldown ? `, перезарядка ${k.cooldown}` : ""}${k.blocker ? `\n${k.blocker}` : ""}`;
     return `<button type="button" class="skill ${selectedSkill === k.id ? "selected" : ""} ${disabled ? "off" : ""} ${k.cost}"
       data-skill="${k.id}" title="${esc(title)}">
       <span class="icon">${k.icon}</span><span class="key">${i + 1}</span>
@@ -103,12 +113,12 @@ function render() {
       ${k.mana ? `<span class="cost">${k.mana}</span>` : ""}</button>`;
   }).join("");
 
-  const a = battle.playerArtifact;
-  $("artifact-mini").innerHTML = `<span class="icon big">${a.icon}</span><div><b>${esc(a.name)}</b><div class="muted">${esc(a.className)}</div></div>`;
+  const talents = me.talents.length ? `Таланты: ${me.talents.length}` : "Без талантов";
+  $("artifact-mini").innerHTML = `<span class="icon big">${unitIcon("player")}</span><div><b>${esc(me.className)}</b><div class="muted">${talents}</div></div>`;
 
   $("hint").textContent = !myTurn ? (isPvp() && s.status === "active" ? "Ход соперника. Ждём его действий…" : "") : skill
     ? skill.target === "self" ? "" : `«${skill.name}»: кликните по противнику в красной зоне. Esc — отмена.`
-    : `${me.movesLeft ? "Синие клетки — куда можно пойти. " : ""}Выберите умение (1–4), чтобы атаковать.`;
+    : `${me.movesLeft ? "Синие клетки — куда можно пойти. " : ""}Выберите умение (1–${battle.skills.length}), чтобы атаковать.`;
   $("end-turn").disabled = !myTurn || busy;
   $("surrender").disabled = s.status !== "active";
 
@@ -132,9 +142,11 @@ function floatText(side, text, cls) {
 
 function playEvents(events) {
   for (const e of events) {
-    if (e.type === "damage") floatText(e.side, `-${e.amount}`, "dmg");
+    if (e.type === "damage") floatText(e.side, e.amount ? `-${e.amount}` : `-${e.armor}${e.damageType === "magic" ? "🔷" : "🛡️"}`, e.amount ? "dmg" : "armor");
     if (e.type === "heal" && e.amount) floatText(e.side, `+${e.amount}`, "heal");
-    if (e.type === "shield") floatText(e.side, `🛡️${e.amount}`, "heal");
+    if (e.type === "armor") floatText(e.side, `+${e.amount}${e.armor === "magic" ? "🔷" : "🛡️"}`, "heal");
+    if (e.type === "miss") floatText(e.side, e.reason === "dodge" ? "уклон" : "парир.", "armor");
+    if (e.type === "reaction") floatText(e.side, "реакция!", "armor");
   }
 }
 
@@ -209,9 +221,7 @@ function showResult() {
   const r = battle.rewards;
   $("result-body").innerHTML = r
     ? `<p>Опыт героя: +${r.experience}${r.levelsGained ? ` · новый уровень героя!` : ""}</p>
-       <p>Опыт артефакта «${esc(r.artifact.name)}»: +${r.artifact.experience}${r.artifact.levelsGained ? ` · новый уровень артефакта!` : ""}</p>
-       ${r.droppedArtifact ? `<p>Выпал артефакт: <b>${esc(r.droppedArtifact.name)}</b>. Его можно надеть на главной.</p>` : ""}
-       ${r.shards ? `<p>Осколки «${esc(r.shards.name)}»: +${r.shards.amount}</p>` : ""}`
+`
     : "";
   $("result").classList.remove("hidden");
 }

@@ -10,7 +10,7 @@
 <body>
 <main class="wide">
   <div class="row">
-    <h1 id="hero-name">…</h1>
+    <h1><span id="hero-name">…</span> <small class="muted" id="class-title"></small></h1>
     <span>
       <a class="link nav-link" href="/pvp">⚔️ PvP-заявки</a>
       <a class="link" href="/wiki">Об игре</a>
@@ -24,39 +24,35 @@
         <span class="muted" id="xp-text"></span>
       </div>
       <div class="xp"><div id="xp-bar" style="width:0"></div></div>
+      <div class="muted" id="class-line"></div>
+      <div class="stats" id="stats"></div>
+      <div class="stats" id="derived"></div>
       <div class="stats">
-        <div class="stat"><span>Здоровье</span><b id="health"></b></div>
-        <div class="stat"><span>Атака</span><b id="attack"></b></div>
-        <div class="stat"><span>Защита</span><b id="defense"></b></div>
-        <div class="stat"><span>Скорость</span><b id="speed"></b></div>
-        <div class="stat"><span>Мана</span><b id="mana"></b></div>
-        <div class="stat"><span>Перемещение</span><b id="move"></b></div>
         <div class="stat"><span>PvP: победы / поражения</span><b id="pvp"></b></div>
         <div class="stat"><span>Бот: победы / поражения</span><b id="bot"></b></div>
       </div>
-      <p class="muted">Зелёным показан бонус от артефакта. <span id="owner"></span></p>
       <button type="button" id="fight" class="full">В бой против бота</button>
       <a class="button-link full" href="/pvp">⚔️ PvP 1×1: заявки на бой</a>
       <div class="error" id="fight-error"></div>
     </div>
     <div class="card">
-      <div class="row">
-        <b>Артефакт</b>
-        <button type="button" class="link" id="change-artifact">Сменить</button>
+      <div class="tabs" id="tabs">
+        <button type="button" data-tab="classes" class="active">Классы</button>
+        <button type="button" data-tab="skills">Умения</button>
+        <button type="button" data-tab="talents">Таланты</button>
+        <button type="button" data-tab="relic">Реликвия</button>
       </div>
-      <div id="artifact-panel"></div>
+      <div id="tab-body"></div>
+      <div class="error" id="build-error"></div>
     </div>
   </div>
 </main>
 
-<div class="modal hidden" id="artifact-modal">
+<div class="modal hidden" id="class-modal">
   <div class="modal-box">
-    <div class="row">
-      <h2 id="modal-title">Артефакты</h2>
-      <button type="button" class="link" id="modal-close">Закрыть</button>
-    </div>
-    <p class="muted" id="modal-hint"></p>
-    <div class="artifact-list" id="artifact-list"></div>
+    <h2>Выберите базовый класс</h2>
+    <p class="muted">Класс определяет умения и характеристики. На 3-м уровне появится очко класса, на 6-м — второй класс (гибрид, например Воин + Монах = Паладин). Менять можно в любой момент вне боя.</p>
+    <div class="artifact-list" id="class-list"></div>
     <div class="error" id="modal-error"></div>
   </div>
 </div>
