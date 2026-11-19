@@ -29,6 +29,8 @@ export interface Unit {
   attack: number;
   defense: number;
   moveRange: number;
+  /** Initiative: the faster unit acts first in each round. */
+  speed: number;
   x: number;
   y: number;
   movesLeft: number;
@@ -49,6 +51,8 @@ export interface BattleState {
   obstacles: Cell[];
   units: Record<Side, Unit>;
   turn: Side;
+  /** Who moves first each round (by speed). */
+  firstSide: Side;
   round: number;
   status: BattleStatus;
   log: string[];
@@ -103,6 +107,7 @@ function makeUnit(side: Side, f: Fighter, x: number, y: number): Unit {
     attack: f.stats.attack,
     defense: f.stats.defense,
     moveRange: f.stats.moveRange,
+    speed: f.stats.speed,
     x,
     y,
     movesLeft: f.stats.moveRange,
@@ -115,8 +120,16 @@ function makeUnit(side: Side, f: Fighter, x: number, y: number): Unit {
   };
 }
 
-export function createBattle(player: Fighter, bot: Fighter): BattleState {
+/**
+ * Creates the battle. The side with higher speed acts first (a tie is decided randomly).
+ * If the bot goes first, call `startBattle` to play its opening turn.
+ */
+export function createBattle(player: Fighter, bot: Fighter, rng: Rng = Math.random): BattleState {
   const mid = Math.floor(GRID_HEIGHT / 2);
+  const ps = player.stats.speed;
+  const bs = bot.stats.speed;
+  const first: Side = ps > bs ? "player" : bs > ps ? "bot" : rng() < 0.5 ? "player" : "bot";
+  const firstName = first === "player" ? player.name : bot.name;
   return {
     width: GRID_WIDTH,
     height: GRID_HEIGHT,
@@ -125,10 +138,15 @@ export function createBattle(player: Fighter, bot: Fighter): BattleState {
       player: makeUnit("player", player, 1, mid),
       bot: makeUnit("bot", bot, GRID_WIDTH - 2, mid),
     },
-    turn: "player",
+    turn: first,
+    firstSide: first,
     round: 1,
     status: "active",
-    log: [`Бой начался: ${player.name} против ${bot.name}.`, "Раунд 1. Ваш ход."],
+    log: [
+      `Бой начался: ${player.name} против ${bot.name}.`,
+      `Инициатива: скорость ${ps} против ${bs}. Первым ходит ${firstName}.`,
+      first === "player" ? "Раунд 1. Ваш ход." : `Раунд 1. Ход: ${bot.name}.`,
+    ],
   };
 }
 
@@ -137,6 +155,36 @@ export const other = (side: Side): Side => (side === "player" ? "bot" : "player"
 /** Chebyshev distance: diagonal steps count as 1. */
 export function distance(ax: number, ay: number, bx: number, by: number): number {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+}
+
+/**
+ * Line of sight between two cell centers: blocked if the segment passes through an obstacle.
+ * Touching an obstacle's corner does not block. Adjacent cells always see each other.
+ */
+export function hasLineOfSight(state: BattleState, ax: number, ay: number, bx: number, by: number): boolean {
+  if (distance(ax, ay, bx, by) <= 1) return true;
+  const steps = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * 16;
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const px = ax + (bx - ax) * t;
+    const py = ay + (by - ay) * t;
+    for (const [ox, oy] of state.obstacles) {
+      if (Math.abs(px - ox) < 0.45 && Math.abs(py - oy) < 0.45) return false;
+    }
+  }
+  return true;
+}
+
+/** Cells visible from the unit's position (for highlighting skill targets). */
+export function visibleCells(state: BattleState, side: Side): Cell[] {
+  const u = state.units[side];
+  const cells: Cell[] = [];
+  for (let y = 0; y < state.height; y++) {
+    for (let x = 0; x < state.width; x++) {
+      if (hasLineOfSight(state, u.x, u.y, x, y)) cells.push([x, y]);
+    }
+  }
+  return cells;
 }
 
 export function unitArtifact(unit: Unit): Artifact {
@@ -289,6 +337,7 @@ function doSkill(state: BattleState, side: Side, skillId: string, x: number, y: 
     const enemy = state.units[other(side)];
     if (enemy.x !== x || enemy.y !== y) throw new BattleError("Выберите противника как цель");
     if (distance(u.x, u.y, enemy.x, enemy.y) > skill.range) throw new BattleError("Цель слишком далеко");
+    if (!hasLineOfSight(state, u.x, u.y, enemy.x, enemy.y)) throw new BattleError("Цель закрыта препятствием");
   }
   applySkill(state, u, skill, rng, events);
 }
@@ -297,9 +346,10 @@ function doSkill(state: BattleState, side: Side, skillId: string, x: number, y: 
 function startTurn(state: BattleState, side: Side, events: BattleEvent[]): boolean {
   const u = state.units[side];
   state.turn = side;
-  if (side === "player") state.round += 1;
+  if (side === state.firstSide) state.round += 1;
   events.push({ type: "turn", side, round: state.round });
-  log(state, side === "player" ? `Раунд ${state.round}. Ваш ход.` : `Ход: ${u.name}.`);
+  const roundText = side === state.firstSide ? `Раунд ${state.round}. ` : "";
+  log(state, side === "player" ? `${roundText}Ваш ход.` : `${roundText}Ход: ${u.name}.`);
 
   u.movesLeft = u.moveRange;
   u.actionUsed = false;
@@ -338,8 +388,14 @@ export type BotTurn = (state: BattleState, act: (action: BattleAction) => void, 
  */
 export function applyPlayerAction(state: BattleState, action: BattleAction, botTurn: BotTurn, rng: Rng = Math.random): BattleEvent[] {
   if (state.status !== "active") throw new BattleError("Бой уже закончен");
-  if (state.turn !== "player") throw new BattleError("Сейчас не ваш ход");
   const events: BattleEvent[] = [];
+  if (action.type === "surrender") {
+    state.units.player.hp = 0;
+    log(state, `${state.units.player.name} сдаётся.`);
+    finish(state, events);
+    return events;
+  }
+  if (state.turn !== "player") throw new BattleError("Сейчас не ваш ход");
 
   switch (action.type) {
     case "move":
@@ -348,29 +404,43 @@ export function applyPlayerAction(state: BattleState, action: BattleAction, botT
     case "skill":
       doSkill(state, "player", action.skillId, action.x, action.y, rng, events);
       return events;
-    case "surrender":
-      state.units.player.hp = 0;
-      log(state, `${state.units.player.name} сдаётся.`);
-      finish(state, events);
-      return events;
     case "end_turn":
       break;
     default:
       throw new BattleError("Неизвестное действие");
   }
 
-  // Bot turn, then next player turn. Loops while the player is stunned.
-  for (let guard = 0; guard < 10 && state.status === "active"; guard++) {
-    if (startTurn(state, "bot", events)) {
-      const act = (a: BattleAction) => {
-        if (state.status !== "active") return;
-        if (a.type === "move") doMove(state, "bot", a.x, a.y, events);
-        else if (a.type === "skill") doSkill(state, "bot", a.skillId, a.x, a.y, rng, events);
-      };
-      botTurn(state, act, rng);
-    }
-    if (state.status !== "active") break;
-    if (startTurn(state, "player", events)) break;
+  passTurn(state, "player", botTurn, rng, events);
+  return events;
+}
+
+/** Plays the bot's opening turn if it won initiative. Call once right after `createBattle`. */
+export function startBattle(state: BattleState, botTurn: BotTurn, rng: Rng = Math.random): BattleEvent[] {
+  const events: BattleEvent[] = [];
+  if (state.status === "active" && state.turn === "bot") {
+    playBot(state, botTurn, rng, events);
+    passTurn(state, "bot", botTurn, rng, events);
   }
   return events;
+}
+
+function playBot(state: BattleState, botTurn: BotTurn, rng: Rng, events: BattleEvent[]) {
+  const act = (a: BattleAction) => {
+    if (state.status !== "active") return;
+    if (a.type === "move") doMove(state, "bot", a.x, a.y, events);
+    else if (a.type === "skill") doSkill(state, "bot", a.skillId, a.x, a.y, rng, events);
+  };
+  botTurn(state, act, rng);
+}
+
+/** Ends `ended`'s turn and advances (playing bot turns, skipping stunned units) until the player can act. */
+function passTurn(state: BattleState, ended: Side, botTurn: BotTurn, rng: Rng, events: BattleEvent[]) {
+  let next = other(ended);
+  for (let guard = 0; guard < 20 && state.status === "active"; guard++) {
+    const canAct = startTurn(state, next, events);
+    if (state.status !== "active") return;
+    if (canAct && next === "player") return;
+    if (canAct) playBot(state, botTurn, rng, events);
+    next = other(next);
+  }
 }

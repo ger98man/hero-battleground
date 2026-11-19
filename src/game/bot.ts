@@ -1,6 +1,7 @@
 import type { Skill } from "./artifacts.js";
 import {
   distance,
+  hasLineOfSight,
   reachableCells,
   skillBlocker,
   unitArtifact,
@@ -30,7 +31,8 @@ export const simpleBot: BotTurn = (state: BattleState, act: (a: BattleAction) =>
   const skills = unitArtifact(me).skills;
 
   const usable = (s: Skill) => skillBlocker(me, s) === null;
-  const inRange = (s: Skill) => s.target === "self" || distance(me.x, me.y, foe.x, foe.y) <= s.range;
+  const inRange = (s: Skill) =>
+    s.target === "self" || (distance(me.x, me.y, foe.x, foe.y) <= s.range && hasLineOfSight(state, me.x, me.y, foe.x, foe.y));
   const isOffensive = (s: Skill) => s.target === "enemy";
   const isDefensive = (s: Skill) => s.target === "self";
 
@@ -59,15 +61,16 @@ export const simpleBot: BotTurn = (state: BattleState, act: (a: BattleAction) =>
   const offensive = skills.filter((s) => isOffensive(s) && usable(s));
   if (!offensive.length) return;
   const wantRange = Math.max(...offensive.map((s) => s.range));
+  const reaches = (x: number, y: number) => distance(x, y, foe.x, foe.y) <= wantRange && hasLineOfSight(state, x, y, foe.x, foe.y);
   const current = distance(me.x, me.y, foe.x, foe.y);
   let best: { x: number; y: number; score: number } | null = null;
   for (const [key, path] of reachableCells(state, "bot")) {
     const [x, y] = key.split(",").map(Number);
     const d = distance(x, y, foe.x, foe.y);
-    const score = (d <= wantRange ? 0 : 100 + d) + path.length * 0.1;
+    const score = (reaches(x, y) ? 0 : 100 + d) + path.length * 0.1;
     if (!best || score < best.score) best = { x, y, score };
   }
-  const stayScore = current <= wantRange ? 0 : 100 + current;
+  const stayScore = reaches(me.x, me.y) ? 0 : 100 + current;
   if (best && best.score < stayScore) act({ type: "move", x: best.x, y: best.y });
   useBest();
 };

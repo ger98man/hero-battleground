@@ -26,13 +26,26 @@ export function createApp() {
   app.use("/api/artifacts", artifactsRouter);
   app.use("/api/battle", battleRouter);
 
-  app.get("/", (req, res) => res.redirect(req.session.userId ? "/hero" : "/login"));
+  /** While the hero is in a battle, the battle is the main screen. */
+  const hasActiveBattle = async (userId: number) => {
+    const { rowCount } = await pool.query(
+      "SELECT 1 FROM battles b JOIN heroes h ON h.id = b.hero_id WHERE h.user_id = $1 AND b.status = 'active'",
+      [userId],
+    );
+    return Boolean(rowCount);
+  };
+
+  app.get("/", async (req, res) => {
+    if (!req.session.userId) return res.redirect("/login");
+    res.redirect((await hasActiveBattle(req.session.userId)) ? "/battle" : "/hero");
+  });
   app.get("/login", (req, res) => {
     if (req.session.userId) return res.redirect("/hero");
     res.sendFile(path.join(publicDir, "login.html"));
   });
-  app.get("/hero", (req, res) => {
+  app.get("/hero", async (req, res) => {
     if (!req.session.userId) return res.redirect("/login");
+    if (await hasActiveBattle(req.session.userId)) return res.redirect("/battle");
     res.sendFile(path.join(publicDir, "hero.html"));
   });
   app.get("/battle", (req, res) => {

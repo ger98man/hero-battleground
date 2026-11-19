@@ -1,4 +1,4 @@
-import type { Artifact } from "./artifacts.js";
+import { artifactBonuses, type Artifact } from "./artifacts.js";
 
 /** Base hero stats as stored in the `heroes` table. */
 export interface HeroBaseStats {
@@ -41,8 +41,8 @@ export function baseStatsForLevel(level: number): HeroBaseStats {
   };
 }
 
-export function combatStats(base: HeroBaseStats, artifact: Artifact): CombatStats {
-  const b = artifact.bonuses;
+export function combatStats(base: HeroBaseStats, artifact: Artifact, artifactLevel = 1): CombatStats {
+  const b = artifactBonuses(artifact, artifactLevel);
   const speed = base.speed + b.speed;
   return {
     maxHp: base.health + b.health,

@@ -177,3 +177,23 @@ export function findSkill(artifact: Artifact, skillId: string): Skill | undefine
 
 /** Chance that a won bot battle drops an artifact the hero does not own yet. */
 export const ARTIFACT_DROP_CHANCE = 0.3;
+/** Shards of one not-owned artifact given for a won bot battle: from MIN to MAX. */
+export const SHARDS_PER_WIN = { min: 1, max: 2 } as const;
+/** Shards needed to craft an artifact. */
+export const SHARDS_TO_CRAFT = 10;
+export const ARTIFACT_MAX_LEVEL = 10;
+/** Each artifact level above 1 adds this share of its base stat bonuses. */
+export const ARTIFACT_BONUS_PER_LEVEL = 0.1;
+
+/** Stat bonuses of an artifact at the given level. */
+export function artifactBonuses(artifact: Artifact, level: number): StatBonuses {
+  const k = 1 + ARTIFACT_BONUS_PER_LEVEL * (Math.max(1, level) - 1);
+  const b = artifact.bonuses;
+  return {
+    health: Math.round(b.health * k),
+    attack: Math.round(b.attack * k),
+    defense: Math.round(b.defense * k),
+    speed: Math.round(b.speed * k),
+    mana: Math.round(b.mana * k),
+  };
+}

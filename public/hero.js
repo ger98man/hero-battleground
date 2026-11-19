@@ -28,6 +28,13 @@ function bonusText(b) {
 
 let state = { hero: null, artifacts: [], needsStarter: false };
 
+function progressHtml(p) {
+  if (!p) return "";
+  if (p.experienceToNext === null) return `<div class="muted">Максимальный уровень артефакта</div>`;
+  return `<div class="muted">Опыт артефакта: ${p.experience} / ${p.experienceToNext}</div>
+    <div class="xp"><div style="width:${Math.min(100, (p.experience / p.experienceToNext) * 100)}%"></div></div>`;
+}
+
 async function load() {
   const res = await fetch("/api/hero");
   if (res.status === 401) return location.assign("/login");
@@ -45,14 +52,16 @@ async function load() {
   $("speed").innerHTML = withBonus(hero.speed, c?.speed);
   $("mana").textContent = c ? c.maxMana : "—";
   $("move").textContent = c ? `${c.moveRange} кл.` : "—";
-  $("wins").textContent = hero.wins;
-  $("losses").textContent = hero.losses;
+  $("pvp").textContent = `${hero.wins} / ${hero.losses}`;
+  $("bot").textContent = `${hero.bot_wins} / ${hero.bot_losses}`;
   $("owner").textContent = `Игрок: ${hero.username}.`;
 
   const a = hero.artifact;
+  const p = hero.artifactProgress;
   $("artifact-panel").innerHTML = a
-    ? `<div class="artifact-head"><span class="icon big">${a.icon}</span><div><b>${esc(a.name)}</b>
-         <div class="muted">${esc(a.className)} · ${bonusText(a.bonuses)}</div></div></div>
+    ? `<div class="artifact-head"><span class="icon big">${a.icon}</span><div><b>${esc(a.name)}</b> <span class="muted">ур. ${p.level}</span>
+         <div class="muted">${esc(a.className)} · ${bonusText(a.currentBonuses)}</div></div></div>
+       ${progressHtml(p)}
        <p class="muted">${esc(a.description)}</p>${a.skills.map(skillHtml).join("")}`
     : `<p class="muted">Артефакт не выбран.</p>`;
 
@@ -70,7 +79,7 @@ async function openModal(starter) {
   $("modal-title").textContent = starter ? "Выберите первый артефакт" : "Артефакты";
   $("modal-hint").textContent = starter
     ? "Артефакт определяет класс героя: бонусы и умения. Остальные артефакты можно будет выбить в бою."
-    : "Сменить можно только на артефакт, который у вас есть. Остальные выпадают после побед над ботом.";
+    : "Сменить можно только на артефакт, который у вас есть. Остальные выпадают после побед над ботом или создаются из осколков.";
   $("modal-close").classList.toggle("hidden", starter);
   $("modal-error").textContent = "";
   $("artifact-list").innerHTML = list.map((a) => {
@@ -78,10 +87,11 @@ async function openModal(starter) {
     if (starter) btn = `<button data-pick="${a.id}">Выбрать</button>`;
     else if (a.equipped) btn = `<button disabled>Надет</button>`;
     else if (a.owned) btn = `<button data-equip="${a.id}">Надеть</button>`;
-    else btn = `<button disabled>Нет (добыча / крафт)</button>`;
+    else if (a.shards >= a.shardsToCraft) btn = `<button data-craft="${a.id}">Создать (${a.shardsToCraft} осколков)</button>`;
+    else btn = `<button disabled>Осколки: ${a.shards} / ${a.shardsToCraft}</button>`;
     return `<div class="artifact-card ${a.owned || starter ? "" : "locked"}">
-      <div class="artifact-head"><span class="icon big">${a.icon}</span><div><b>${esc(a.name)}</b>
-        <div class="muted">${esc(a.className)} · ${bonusText(a.bonuses)} · ход ${a.moveRange} кл.</div></div></div>
+      <div class="artifact-head"><span class="icon big">${a.icon}</span><div><b>${esc(a.name)}</b>${a.progress ? ` <span class="muted">ур. ${a.progress.level}</span>` : ""}
+        <div class="muted">${esc(a.className)} · ${bonusText(a.currentBonuses)} · ход ${a.moveRange} кл.</div></div></div>
       <p class="muted">${esc(a.description)}</p>
       <details><summary>Умения</summary>${a.skills.map(skillHtml).join("")}</details>
       ${btn}</div>`;
@@ -92,16 +102,19 @@ async function openModal(starter) {
 $("artifact-list").onclick = async (e) => {
   const pick = e.target.dataset.pick;
   const equip = e.target.dataset.equip;
-  if (!pick && !equip) return;
-  const res = await fetch(pick ? "/api/artifacts/starter" : "/api/artifacts/equip", {
+  const craft = e.target.dataset.craft;
+  if (!pick && !equip && !craft) return;
+  const url = pick ? "/api/artifacts/starter" : equip ? "/api/artifacts/equip" : "/api/artifacts/craft";
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ artifactId: pick || equip }),
+    body: JSON.stringify({ artifactId: pick || equip || craft }),
   });
   if (!res.ok) {
     $("modal-error").textContent = (await res.json().catch(() => ({}))).error || "Ошибка";
     return;
   }
+  if (craft) return openModal(false); // stay in the menu so the new artifact can be equipped
   $("artifact-modal").classList.add("hidden");
   load();
 };

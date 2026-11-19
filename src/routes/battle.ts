@@ -1,21 +1,32 @@
 import { Router, type Request, type Response } from "express";
+import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../session.js";
-import { ARTIFACT_DROP_CHANCE, ARTIFACTS } from "../game/artifacts.js";
+import { ARTIFACT_DROP_CHANCE, ARTIFACTS, getArtifact, SHARDS_PER_WIN } from "../game/artifacts.js";
 import {
   applyPlayerAction,
   BattleError,
   createBattle,
   reachableCells,
   skillBlocker,
+  startBattle,
   unitArtifact,
+  visibleCells,
   type BattleAction,
   type BattleEvent,
   type BattleState,
 } from "../game/battle.js";
 import { simpleBot } from "../game/bot.js";
 import { baseStatsForLevel, combatStats } from "../game/stats.js";
-import { getHeroByUser, grantBattleResult, heroCombatStats, ownedArtifactIds } from "../services/heroes.js";
+import {
+  addShards,
+  getHeroByUser,
+  grantArtifactExperience,
+  grantHeroBattleResult,
+  heroCombatStats,
+  ownedArtifacts,
+  type HeroRow,
+} from "../services/heroes.js";
 
 export const battleRouter = Router();
 battleRouter.use(requireAuth);
@@ -30,7 +41,9 @@ interface BattleRow {
 interface Rewards {
   experience: number;
   levelsGained: number;
+  artifact: { id: string; name: string; experience: number; levelsGained: number };
   droppedArtifact: { id: string; name: string } | null;
+  shards: { id: string; name: string; amount: number } | null;
 }
 
 const BOT_NAMES = ["Тренировочный манекен", "Страж арены", "Безымянный наёмник", "Призрак арены"];
@@ -57,6 +70,8 @@ function battleView(row: BattleRow) {
     })),
     botSkills: botArtifact.skills.map((sk) => ({ id: sk.id, name: sk.name, icon: sk.icon })),
     reachable: myTurn ? [...reachableCells(s, "player").keys()].map((k) => k.split(",").map(Number)) : [],
+    /** Cells the player can target from the current position (line of sight). */
+    visible: myTurn ? visibleCells(s, "player") : [],
   };
 }
 
@@ -77,7 +92,9 @@ battleRouter.post("/", async (req, res) => {
   );
   if (existing.rows[0]) return sendBattle(res, existing.rows[0]);
 
-  const stats = heroCombatStats(hero);
+  const owned = await ownedArtifacts(hero.id);
+  const artifactLevel = owned.find((o) => o.artifactId === hero.equipped_artifact)?.level ?? 1;
+  const stats = heroCombatStats(hero, artifactLevel);
   if (!stats || !hero.equipped_artifact) {
     res.status(400).json({ error: "Сначала выберите артефакт" });
     return;
@@ -89,16 +106,18 @@ battleRouter.post("/", async (req, res) => {
       name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
       level: hero.level,
       artifactId: botArtifact.id,
-      stats: combatStats(baseStatsForLevel(hero.level), botArtifact),
+      // The bot gets the same hero level and artifact level as the player.
+      stats: combatStats(baseStatsForLevel(hero.level), botArtifact, artifactLevel),
     },
   );
+  const events = startBattle(state, simpleBot);
   try {
     const { rows } = await pool.query<BattleRow>(
       "INSERT INTO battles (hero_id, state) VALUES ($1, $2) RETURNING id::int, status, state, rewards",
       [hero.id, state],
     );
     res.status(201);
-    return sendBattle(res, rows[0]);
+    return sendBattle(res, rows[0], events);
   } catch (err) {
     // Two clicks at once: the unique index keeps one active battle.
     if ((err as { code?: string }).code === "23505") {
@@ -185,23 +204,7 @@ battleRouter.post("/:id/action", async (req, res) => {
     }
 
     if (row.state.status !== "active") {
-      const won = row.state.status === "won";
-      const experience = won ? 30 + 10 * row.state.units.bot.level : 10;
-      const levelsGained = await grantBattleResult(client, hero, won, experience);
-      let droppedArtifact: Rewards["droppedArtifact"] = null;
-      if (won && Math.random() < ARTIFACT_DROP_CHANCE) {
-        const owned = new Set(await ownedArtifactIds(hero.id, client));
-        const candidates = ARTIFACTS.filter((a) => !owned.has(a.id));
-        const drop = candidates[Math.floor(Math.random() * candidates.length)];
-        if (drop) {
-          await client.query(
-            "INSERT INTO hero_artifacts (hero_id, artifact_id, source) VALUES ($1, $2, 'drop') ON CONFLICT DO NOTHING",
-            [hero.id, drop.id],
-          );
-          droppedArtifact = { id: drop.id, name: drop.name };
-        }
-      }
-      row.rewards = { experience, levelsGained, droppedArtifact };
+      row.rewards = await grantRewards(client, hero, row.state);
     }
     row.status = row.state.status;
 
@@ -221,3 +224,41 @@ battleRouter.post("/:id/action", async (req, res) => {
   }
 });
 
+
+/** Hero XP, artifact XP, bot win/loss counter, artifact drop and shards. */
+async function grantRewards(client: PoolClient, hero: HeroRow, state: BattleState): Promise<Rewards> {
+  const won = state.status === "won";
+  const experience = won ? 30 + 10 * state.units.bot.level : 10;
+  const levelsGained = await grantHeroBattleResult(client, hero, won, experience);
+  const artifactId = state.units.player.artifactId;
+  const artifactLevels = await grantArtifactExperience(client, hero.id, artifactId, experience);
+  const rewards: Rewards = {
+    experience,
+    levelsGained,
+    artifact: { id: artifactId, name: getArtifact(artifactId)?.name ?? artifactId, experience, levelsGained: artifactLevels },
+    droppedArtifact: null,
+    shards: null,
+  };
+  if (!won) return rewards;
+
+  const owned = new Set((await ownedArtifacts(hero.id, client)).map((o) => o.artifactId));
+  const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
+  if (Math.random() < ARTIFACT_DROP_CHANCE) {
+    const drop = pick(ARTIFACTS.filter((a) => !owned.has(a.id)));
+    if (drop) {
+      await client.query(
+        "INSERT INTO hero_artifacts (hero_id, artifact_id, source) VALUES ($1, $2, 'drop') ON CONFLICT DO NOTHING",
+        [hero.id, drop.id],
+      );
+      owned.add(drop.id);
+      rewards.droppedArtifact = { id: drop.id, name: drop.name };
+    }
+  }
+  const shardTarget = pick(ARTIFACTS.filter((a) => !owned.has(a.id)));
+  if (shardTarget) {
+    const amount = SHARDS_PER_WIN.min + Math.floor(Math.random() * (SHARDS_PER_WIN.max - SHARDS_PER_WIN.min + 1));
+    await addShards(client, hero.id, shardTarget.id, amount);
+    rewards.shards = { id: shardTarget.id, name: shardTarget.name, amount };
+  }
+  return rewards;
+}

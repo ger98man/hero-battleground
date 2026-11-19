@@ -42,6 +42,7 @@ function render() {
 
   const reachable = new Set(battle.reachable.map(([x, y]) => `${x},${y}`));
   const obstacles = new Set(s.obstacles.map(([x, y]) => `${x},${y}`));
+  const visible = new Set(battle.visible.map(([x, y]) => `${x},${y}`));
   const skill = selectedSkill && battle.skills.find((k) => k.id === selectedSkill);
   const grid = $("grid");
   grid.style.gridTemplateColumns = `repeat(${s.width}, 1fr)`;
@@ -55,7 +56,7 @@ function render() {
       if (obstacles.has(key)) { cls.push("rock"); content = "🪨"; }
       if (me.x === x && me.y === y) { cls.push("unit", "player"); content = battle.playerArtifact.icon; }
       if (foe.x === x && foe.y === y) { cls.push("unit", "bot"); content = battle.botArtifact.icon; }
-      if (myTurn && skill?.target === "enemy" && dist(me.x, me.y, x, y) <= skill.range && !obstacles.has(key)) cls.push("in-range");
+      if (myTurn && skill?.target === "enemy" && dist(me.x, me.y, x, y) <= skill.range && visible.has(key) && !obstacles.has(key)) cls.push("in-range");
       else if (myTurn && !skill && reachable.has(key)) cls.push("reach");
       html += `<div class="${cls.join(" ")}" data-x="${x}" data-y="${y}">${content}</div>`;
     }
@@ -180,8 +181,10 @@ function showResult() {
   $("result-title").textContent = won ? "Победа!" : "Поражение";
   const r = battle.rewards;
   $("result-body").innerHTML = r
-    ? `<p>Опыт: +${r.experience}${r.levelsGained ? ` · Новый уровень! (+${r.levelsGained})` : ""}</p>
-       ${r.droppedArtifact ? `<p>Выпал артефакт: <b>${esc(r.droppedArtifact.name)}</b>. Его можно надеть на странице героя.</p>` : ""}`
+    ? `<p>Опыт героя: +${r.experience}${r.levelsGained ? ` · новый уровень героя!` : ""}</p>
+       <p>Опыт артефакта «${esc(r.artifact.name)}»: +${r.artifact.experience}${r.artifact.levelsGained ? ` · новый уровень артефакта!` : ""}</p>
+       ${r.droppedArtifact ? `<p>Выпал артефакт: <b>${esc(r.droppedArtifact.name)}</b>. Его можно надеть на главной.</p>` : ""}
+       ${r.shards ? `<p>Осколки «${esc(r.shards.name)}»: +${r.shards.amount}</p>` : ""}`
     : "";
   $("result").classList.remove("hidden");
 }

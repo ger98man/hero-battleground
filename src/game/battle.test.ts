@@ -1,7 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ARTIFACTS, getArtifact } from "./artifacts.js";
-import { applyPlayerAction, BattleError, createBattle, distance, reachableCells, type BattleState, type Fighter } from "./battle.js";
+import {
+  applyPlayerAction,
+  BattleError,
+  createBattle,
+  distance,
+  hasLineOfSight,
+  reachableCells,
+  startBattle,
+  type BattleState,
+  type Fighter,
+} from "./battle.js";
 import { simpleBot } from "./bot.js";
 import { baseStatsForLevel, combatStats } from "./stats.js";
 
@@ -12,8 +22,9 @@ function seeded(seed: number) {
   };
 }
 
-function fighter(name: string, artifactId: string, level = 1): Fighter {
-  return { name, level, artifactId, stats: combatStats(baseStatsForLevel(level), getArtifact(artifactId)!) };
+function fighter(name: string, artifactId: string, level = 1, speedBonus = 0): Fighter {
+  const stats = combatStats(baseStatsForLevel(level), getArtifact(artifactId)!);
+  return { name, level, artifactId, stats: { ...stats, speed: stats.speed + speedBonus } };
 }
 
 /** Naive player: walk towards the bot, use the strongest skill that reaches, end turn. */
@@ -60,7 +71,7 @@ test("every artifact has 4 skills with unique ids", () => {
 });
 
 test("movement respects range and obstacles", () => {
-  const state = createBattle(fighter("A", "abyss_staff"), fighter("B", "ash_blade"));
+  const state = createBattle(fighter("A", "abyss_staff", 1, 1), fighter("B", "ash_blade"));
   const reach = reachableCells(state, "player");
   for (const path of reach.values()) assert.ok(path.length <= state.units.player.moveRange);
   for (const [x, y] of state.obstacles) assert.ok(!reach.has(`${x},${y}`));
@@ -69,7 +80,7 @@ test("movement respects range and obstacles", () => {
 
 test("skills check range, action economy, mana and cooldown", () => {
   const rng = seeded(1);
-  const state = createBattle(fighter("A", "abyss_staff"), fighter("B", "dawn_shield"));
+  const state = createBattle(fighter("A", "abyss_staff", 1, 1), fighter("B", "dawn_shield"));
   const { player, bot } = state.units;
   // Out of range at start (distance 7, range 5).
   assert.throws(() => applyPlayerAction(state, { type: "skill", skillId: "abyss_fireball", x: bot.x, y: bot.y }, simpleBot, rng), /далеко/);
@@ -94,7 +105,8 @@ test("battles between all artifact pairs finish", () => {
   for (const pa of ARTIFACTS) {
     for (const ba of ARTIFACTS) {
       const rng = seeded(pa.id.length * 31 + ba.id.length);
-      const state = createBattle(fighter("P", pa.id), fighter("B", ba.id));
+      const state = createBattle(fighter("P", pa.id), fighter("B", ba.id), rng);
+      startBattle(state, simpleBot, rng);
       for (let i = 0; i < 60 && state.status === "active"; i++) playRound(state, rng);
       assert.notEqual(state.status, "active", `${pa.id} vs ${ba.id} did not finish`);
     }
@@ -106,4 +118,32 @@ test("surrender loses the battle", () => {
   applyPlayerAction(state, { type: "surrender" }, simpleBot);
   assert.equal(state.status, "lost");
   assert.throws(() => applyPlayerAction(state, { type: "end_turn" }, simpleBot), BattleError);
+});
+
+test("faster side acts first; bot opening turn is played by startBattle", () => {
+  const playerFirst = createBattle(fighter("P", "ash_blade", 1, 3), fighter("B", "ash_blade"));
+  assert.equal(playerFirst.turn, "player");
+  const botFirst = createBattle(fighter("P", "ash_blade"), fighter("B", "ash_blade", 1, 3));
+  assert.equal(botFirst.turn, "bot");
+  const events = startBattle(botFirst, simpleBot, seeded(3));
+  assert.ok(events.some((e) => e.type === "move" && e.side === "bot"));
+  assert.equal(botFirst.turn, "player");
+  assert.equal(botFirst.round, 1);
+  applyPlayerAction(botFirst, { type: "end_turn" }, simpleBot, seeded(4));
+  assert.equal(botFirst.round, 2);
+});
+
+test("obstacles block line of sight", () => {
+  const state = createBattle(fighter("P", "abyss_staff", 1, 1), fighter("B", "dawn_shield"));
+  state.obstacles = [[4, 3]];
+  assert.equal(hasLineOfSight(state, 2, 3, 6, 3), false);
+  assert.equal(hasLineOfSight(state, 2, 2, 6, 2), true);
+  // Touching an obstacle corner does not block.
+  assert.equal(hasLineOfSight(state, 3, 1, 6, 4), true); // only touches the corner
+  state.units.player.x = 2;
+  state.units.bot.x = 6;
+  assert.throws(
+    () => applyPlayerAction(state, { type: "skill", skillId: "abyss_bolt", x: 6, y: 3 }, simpleBot),
+    /препятствием/,
+  );
 });

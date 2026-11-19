@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../session.js";
-import { getArtifact } from "../game/artifacts.js";
-import { catalogView, getHeroByUser, ownedArtifactIds } from "../services/heroes.js";
+import { getArtifact, SHARDS_TO_CRAFT } from "../game/artifacts.js";
+import { catalogView, getHeroByUser, ownedArtifacts, shardCounts } from "../services/heroes.js";
 
 export const artifactsRouter = Router();
 artifactsRouter.use(requireAuth);
@@ -13,36 +13,72 @@ artifactsRouter.get("/", async (req, res) => {
     res.status(404).json({ error: "Герой не найден" });
     return;
   }
-  const owned = await ownedArtifactIds(hero.id);
-  res.json({ artifacts: catalogView(owned, hero.equipped_artifact), needsStarter: owned.length === 0 });
+  const owned = await ownedArtifacts(hero.id);
+  const shards = await shardCounts(hero.id);
+  res.json({ artifacts: catalogView(owned, shards, hero.equipped_artifact), needsStarter: owned.length === 0 });
 });
 
-/** First artifact: only once, only from the starter set. */
-artifactsRouter.post("/starter", async (req, res) => {
-  const artifact = getArtifact(String(req.body?.artifactId ?? ""));
-  if (!artifact?.starter) {
-    res.status(400).json({ error: "Этот артефакт нельзя выбрать как стартовый" });
-    return;
-  }
+/** Runs `fn` in a transaction with the current hero row locked. */
+async function withHero<T>(userId: number, fn: (client: import("pg").PoolClient, heroId: number) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const hero = await getHeroByUser(req.session.userId!, client, true);
+    const hero = await getHeroByUser(userId, client, true);
     if (!hero) throw new Error("hero not found");
-    if ((await ownedArtifactIds(hero.id, client)).length > 0) {
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: "Стартовый артефакт уже выбран" });
-      return;
-    }
-    await client.query("INSERT INTO hero_artifacts (hero_id, artifact_id, source) VALUES ($1, $2, 'starter')", [hero.id, artifact.id]);
-    await client.query("UPDATE heroes SET equipped_artifact = $2 WHERE id = $1", [hero.id, artifact.id]);
+    const result = await fn(client, hero.id);
     await client.query("COMMIT");
-    res.json({ ok: true });
+    return result;
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     throw err;
   } finally {
     client.release();
+  }
+}
+
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+/** First artifact: only once, only one from the starter set. */
+artifactsRouter.post("/starter", async (req, res) => {
+  const artifact = getArtifact(String(req.body?.artifactId ?? ""));
+  try {
+    if (!artifact?.starter) throw new HttpError(400, "Этот артефакт нельзя выбрать как стартовый");
+    await withHero(req.session.userId!, async (client, heroId) => {
+      if ((await ownedArtifacts(heroId, client)).length > 0) throw new HttpError(409, "Стартовый артефакт уже выбран");
+      await client.query("INSERT INTO hero_artifacts (hero_id, artifact_id, source) VALUES ($1, $2, 'starter')", [heroId, artifact.id]);
+      await client.query("UPDATE heroes SET equipped_artifact = $2 WHERE id = $1", [heroId, artifact.id]);
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    if (!(err instanceof HttpError)) throw err;
+    res.status(err.status).json({ error: err.message });
+  }
+});
+
+/** Craft an artifact from its shards. */
+artifactsRouter.post("/craft", async (req, res) => {
+  const artifact = getArtifact(String(req.body?.artifactId ?? ""));
+  try {
+    if (!artifact) throw new HttpError(400, "Нет такого артефакта");
+    await withHero(req.session.userId!, async (client, heroId) => {
+      const owned = await ownedArtifacts(heroId, client);
+      if (owned.length === 0) throw new HttpError(409, "Сначала выберите стартовый артефакт");
+      if (owned.some((o) => o.artifactId === artifact.id)) throw new HttpError(409, "Этот артефакт уже есть");
+      const { rowCount } = await client.query(
+        "UPDATE artifact_shards SET amount = amount - $3 WHERE hero_id = $1 AND artifact_id = $2 AND amount >= $3",
+        [heroId, artifact.id, SHARDS_TO_CRAFT],
+      );
+      if (!rowCount) throw new HttpError(400, `Нужно ${SHARDS_TO_CRAFT} осколков`);
+      await client.query("INSERT INTO hero_artifacts (hero_id, artifact_id, source) VALUES ($1, $2, 'craft')", [heroId, artifact.id]);
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    if (!(err instanceof HttpError)) throw err;
+    res.status(err.status).json({ error: err.message });
   }
 });
 
