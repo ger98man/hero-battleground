@@ -17,6 +17,7 @@ import {
   type BattleState,
 } from "../game/battle.js";
 import { simpleBot } from "../game/bot.js";
+import { postSystemMessage } from "../realtime/chat.js";
 import { baseStatsForLevel, combatStats } from "../game/stats.js";
 import {
   addShards,
@@ -215,6 +216,11 @@ battleRouter.post("/:id/action", async (req, res) => {
       [row.id, row.state, row.status, row.rewards],
     );
     await client.query("COMMIT");
+    if (row.state.status !== "active") {
+      const { player, bot } = row.state.units;
+      const [winner, loser] = row.state.status === "won" ? [player, bot] : [bot, player];
+      void postSystemMessage(`${winner.name} победил ${loser.name} (бой с ботом)`);
+    }
     return sendBattle(res, row, events);
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

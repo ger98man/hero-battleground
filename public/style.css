@@ -45,7 +45,7 @@ button.full { width: 100%; margin-top: 12px; }
 .row.gap { gap: 12px; justify-content: flex-start; margin-top: 16px; }
 
 /* Battle page */
-.battle { max-width: 1200px; margin: 0 auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.battle { max-width: 1200px; margin: 0 auto; padding: 12px 16px 64px; display: flex; flex-direction: column; gap: 12px; }
 .battle-top { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: start; }
 .unit-panel { background: #1f2229; border: 1px solid #2d313a; border-radius: 8px; padding: 10px 12px; }
 .unit-panel.right { text-align: right; }

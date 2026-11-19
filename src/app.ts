@@ -6,6 +6,7 @@ import { authRouter } from "./routes/auth.js";
 import { heroRouter } from "./routes/hero.js";
 import { artifactsRouter } from "./routes/artifacts.js";
 import { battleRouter } from "./routes/battle.js";
+import { playersRouter } from "./routes/players.js";
 import { pool } from "./db/pool.js";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
@@ -25,6 +26,7 @@ export function createApp() {
   app.use("/api/hero", heroRouter);
   app.use("/api/artifacts", artifactsRouter);
   app.use("/api/battle", battleRouter);
+  app.use("/api", playersRouter);
 
   /** While the hero is in a battle, the battle is the main screen. */
   const hasActiveBattle = async (userId: number) => {
@@ -51,6 +53,10 @@ export function createApp() {
   app.get("/battle", (req, res) => {
     if (!req.session.userId) return res.redirect("/login");
     res.sendFile(path.join(publicDir, "battle.html"));
+  });
+  app.get("/heroes/:name", (req, res) => {
+    if (!req.session.userId) return res.redirect("/login");
+    res.sendFile(path.join(publicDir, "profile.html"));
   });
   app.use(express.static(publicDir, { index: false }));
 

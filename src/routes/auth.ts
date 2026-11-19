@@ -2,6 +2,7 @@ import { Router, type Request } from "express";
 import bcrypt from "bcryptjs";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../session.js";
+import { postSystemMessage } from "../realtime/chat.js";
 
 export const authRouter = Router();
 
@@ -45,6 +46,7 @@ authRouter.post("/register", async (req, res) => {
     await regenerate(req);
     req.session.userId = userId;
     res.status(201).json({ ok: true });
+    void postSystemMessage(`Новый игрок: ${heroName}`);
   } catch (err: unknown) {
     await client.query("ROLLBACK").catch(() => {});
     const e = err as { code?: string; constraint?: string };
