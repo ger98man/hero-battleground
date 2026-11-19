@@ -17,6 +17,7 @@
 - `src/db/migrate.ts` — простой мигратор: применяет файлы `migrations/*.sql` по порядку и запоминает их в таблице `schema_migrations`.
 - `src/realtime/chat.ts` — WebSocket `/ws`: счётчик онлайна и общий чат (таблица `chat_messages`, хранятся последние 200 сообщений канала, при входе показываются 20). `postSystemMessage()` пишет системные строки вроде «Новый игрок: …». Онлайн считается в памяти процесса, поэтому рассчитано на один инстанс сервера.
 - `src/routes/players.ts` — `GET /api/online` (число игроков онлайн, без входа) и `GET /api/heroes/:name` (профиль чужого героя, страница `/heroes/:name`).
+- `docs/wiki/*.md` и `docs/CHANGELOG.md` — описание игры и журнал изменений для игроков, страница `/wiki` (открыта без входа, API `GET /api/wiki`, `GET /api/wiki/:slug`). Правила обновления — в `CLAUDE.md`.
 - `public/` — страницы `/login`, `/hero` и `/battle` (обычный HTML + JS, без фреймворка).
 
 ## Как устроен бой

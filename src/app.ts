@@ -7,6 +7,7 @@ import { heroRouter } from "./routes/hero.js";
 import { artifactsRouter } from "./routes/artifacts.js";
 import { battleRouter } from "./routes/battle.js";
 import { playersRouter } from "./routes/players.js";
+import { wikiRouter } from "./routes/wiki.js";
 import { pool } from "./db/pool.js";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
@@ -24,6 +25,7 @@ export function createApp() {
   app.use(sessionMiddleware);
   app.use("/api/auth", authRouter);
   app.use("/api/hero", heroRouter);
+  app.use("/api/wiki", wikiRouter);
   app.use("/api/artifacts", artifactsRouter);
   app.use("/api/battle", battleRouter);
   app.use("/api", playersRouter);
@@ -58,6 +60,8 @@ export function createApp() {
     if (!req.session.userId) return res.redirect("/login");
     res.sendFile(path.join(publicDir, "profile.html"));
   });
+  // Game docs and changelog, open to everyone (no login needed).
+  app.get(["/wiki", "/wiki/:slug"], (_req, res) => res.sendFile(path.join(publicDir, "wiki.html")));
   app.use(express.static(publicDir, { index: false }));
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {

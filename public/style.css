@@ -89,3 +89,23 @@ button.full { width: 100%; margin-top: 12px; }
 .skill .cd { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 4px; }
 .end-col { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
 #end-turn { padding: 16px; font-size: 17px; }
+
+/* Wiki (/wiki) */
+main.wide { max-width: 860px; }
+a { color: #8fa6ff; }
+a.link { text-decoration: none; }
+.tabs a.tab { flex: 1; text-align: center; padding: 10px 14px; border-radius: 6px; border: 1px solid #2d313a; color: #9aa0ab; text-decoration: none; }
+.tabs a.tab.active { color: #fff; border-color: #5b7cfa; }
+.wiki-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.wiki-nav a { font-size: 14px; padding: 6px 10px; border-radius: 6px; background: #1f2229; color: #9aa0ab; text-decoration: none; }
+.wiki-nav a.active { color: #fff; background: #2d3550; }
+.wiki { line-height: 1.55; overflow-wrap: anywhere; margin-bottom: 80px; }
+.wiki h1 { font-size: 22px; }
+.wiki h2 { font-size: 18px; margin: 28px 0 8px; }
+.wiki h3 { font-size: 16px; margin: 20px 0 6px; }
+.wiki table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; display: block; overflow-x: auto; }
+.wiki th, .wiki td { border: 1px solid #2d313a; padding: 6px 8px; text-align: left; vertical-align: top; }
+.wiki th { background: #15171c; }
+.wiki blockquote { margin: 12px 0; padding: 8px 12px; border-left: 3px solid #5b7cfa; background: #15171c; color: #c9ccd3; }
+.wiki code { background: #15171c; padding: 1px 4px; border-radius: 4px; }
+.footer-links { text-align: center; margin-top: 16px; font-size: 14px; }
