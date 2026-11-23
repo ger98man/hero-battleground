@@ -25,7 +25,7 @@ import {
 } from "../game/battle.js";
 import { randomBuild, simpleBot } from "../game/bot.js";
 import { combatProfile } from "../game/build.js";
-import { defaultArmy, FACTIONS } from "../game/factions.js";
+import { defaultArmy, FACTIONS, type ArmyStack } from "../game/factions.js";
 import { postSystemMessage } from "../realtime/chat.js";
 import { getHeroByUser, grantHeroBattleResult, heroTitle, type HeroRow } from "../services/heroes.js";
 import {
@@ -121,6 +121,19 @@ function battleView(row: BattleRow, heroId: number) {
   };
 }
 
+/** The faction hero figure of a hero row, if chosen. */
+function figureOf(hero: HeroRow): { faction: string; hero: string } | undefined {
+  return hero.faction && hero.faction_hero ? { faction: hero.faction, hero: hero.faction_hero } : undefined;
+}
+
+/** A bot gets a random faction, a random hero figure of it and that faction's starting army (if the player has an army). */
+function botArmy(hero: HeroRow): { army: ArmyStack[]; figure?: { faction: string; hero: string } } {
+  if (!hero.army.length) return { army: [] };
+  const faction = FACTIONS[Math.floor(Math.random() * FACTIONS.length)];
+  const figure = faction.heroes[Math.floor(Math.random() * faction.heroes.length)];
+  return { army: defaultArmy({ faction: faction.id, level: hero.level }), figure: { faction: faction.id, hero: figure.id } };
+}
+
 /** Old battles (before classes) cannot be shown. */
 const isCurrentFormat = (row: BattleRow) => row.state?.version === 2;
 
@@ -153,13 +166,13 @@ battleRouter.post("/", async (req, res) => {
     return;
   }
   const state = createBattle(
-    { name: hero.name, level: hero.level, army: hero.army, profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } },
+    { name: hero.name, level: hero.level, army: hero.army, figure: figureOf(hero), profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } },
     {
       name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
       // The bot has the same level, a random legal build and the starting army of a random faction.
       level: hero.level,
       profile: combatProfile(hero.level, randomBuild(hero.level)),
-      army: hero.army.length ? defaultArmy({ faction: FACTIONS[Math.floor(Math.random() * FACTIONS.length)].id, level: hero.level }) : [],
+      ...botArmy(hero),
     },
   );
   const events = startBattle(state, simpleBot);

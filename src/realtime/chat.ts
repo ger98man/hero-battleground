@@ -95,8 +95,24 @@ export async function chatHistory(channel = GLOBAL, limit = CHAT_LIMITS.historyS
   return rows.map((r) => ({ ...r, id: Number(r.id) })).reverse();
 }
 
+/** The player's active battle and the users taking part in it (one in a bot battle, two in PvP). */
+async function activeBattleOf(userId: number): Promise<{ channel: string; userIds: number[] } | undefined> {
+  const { rows } = await pool.query<{ id: string; creator: number; opponent: number | null }>(
+    `SELECT b.id, h1.user_id::int AS creator, h2.user_id::int AS opponent
+       FROM battles b
+       JOIN heroes h1 ON h1.id = b.hero_id
+       LEFT JOIN heroes h2 ON h2.id = b.opponent_hero_id
+      WHERE b.status = 'active' AND (h1.user_id = $1 OR h2.user_id = $1)
+      LIMIT 1`,
+    [userId],
+  );
+  const row = rows[0];
+  if (!row) return undefined;
+  return { channel: `battle:${row.id}`, userIds: row.opponent === null ? [row.creator] : [row.creator, row.opponent] };
+}
+
 /** Returns an error text for the player, or undefined if the message was posted. */
-async function postMessage(player: Player, raw: unknown): Promise<string | undefined> {
+async function postMessage(player: Player, raw: unknown, toBattle = false): Promise<string | undefined> {
   // Collapse whitespace so nobody can post walls of empty lines.
   const text = String(raw ?? "").replace(/\s+/g, " ").trim();
   if (!text) return "Пустое сообщение";
@@ -110,7 +126,16 @@ async function postMessage(player: Player, raw: unknown): Promise<string | undef
   // Refresh the level in case the hero levelled up since connecting.
   const fresh = await loadPlayer(player.userId);
   if (fresh) player.level = fresh.level;
-  await insertMessage(GLOBAL, player.userId, text, player.heroName, player.level);
+  if (!toBattle) {
+    const message = await insertMessage(GLOBAL, player.userId, text, player.heroName, player.level);
+    broadcast({ type: "message", message });
+    return undefined;
+  }
+  // Battle chat: only the participants of the player's current battle see it.
+  const battle = await activeBattleOf(player.userId);
+  if (!battle) return "Боевой чат доступен только во время боя";
+  const message = await insertMessage(battle.channel, player.userId, text, player.heroName, player.level);
+  for (const userId of battle.userIds) sendToUser(userId, { type: "battle-message", message });
   return undefined;
 }
 
@@ -120,7 +145,7 @@ async function insertMessage(
   text: string,
   heroName: string | null,
   level: number | null,
-) {
+): Promise<ChatMessage> {
   const { rows } = await pool.query<{ id: string; created_at: Date }>(
     `INSERT INTO chat_messages (channel, kind, user_id, body) VALUES ($1, $2, $3, $4)
      RETURNING id, created_at`,
@@ -134,13 +159,13 @@ async function insertMessage(
     text,
     createdAt: rows[0].created_at.toISOString(),
   };
-  broadcast({ type: "message", message });
   await pool.query(
     `DELETE FROM chat_messages
       WHERE channel = $1
         AND id <= (SELECT id FROM chat_messages WHERE channel = $1 ORDER BY id DESC OFFSET $2 LIMIT 1)`,
     [channel, CHAT_LIMITS.storedPerChannel],
   );
+  return message;
 }
 
 /**
@@ -149,7 +174,7 @@ async function insertMessage(
  */
 export async function postSystemMessage(text: string): Promise<void> {
   try {
-    await insertMessage(GLOBAL, null, text, null, null);
+    broadcast({ type: "message", message: await insertMessage(GLOBAL, null, text, null, null) });
   } catch (err) {
     console.error("system chat message failed", err);
   }
@@ -221,15 +246,20 @@ async function onConnection(ws: Client, player: Player) {
   });
 
   ws.on("message", async (data) => {
-    let msg: { type?: string; text?: unknown };
+    let msg: { type?: string; text?: unknown; channel?: unknown };
     try {
       msg = JSON.parse(String(data));
     } catch {
       return;
     }
+    if (msg.type === "battle-history") {
+      const battle = await activeBattleOf(player.userId).catch(() => undefined);
+      send(ws, { type: "battle-history", history: battle ? await chatHistory(battle.channel).catch(() => []) : [] });
+      return;
+    }
     if (msg.type !== "chat") return;
     try {
-      const error = await postMessage(player, msg.text);
+      const error = await postMessage(player, msg.text, msg.channel === "battle");
       if (error) send(ws, { type: "error", error });
     } catch (err) {
       console.error("chat post failed", err);

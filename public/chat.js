@@ -1,13 +1,15 @@
 // Global chat in the bottom-left corner, over one WebSocket (/ws). Also keeps the online counter live.
 (() => {
+  // On the battle screen (<body data-chat="battle">) this is the battle chat: only the battle's participants.
+  const isBattle = document.body.dataset.chat === "battle";
   const root = document.createElement("aside");
   root.className = "chat";
   root.innerHTML = `
-    <div class="chat-head"><b>Общий чат</b><span class="muted" id="chat-status"></span></div>
+    <div class="chat-head"><b>${isBattle ? "Боевой чат" : "Общий чат"}</b><span class="muted" id="chat-status"></span></div>
     <div class="chat-body">
       <ol class="chat-log" id="chat-log"></ol>
       <form class="chat-form" id="chat-form">
-        <input id="chat-input" maxlength="200" autocomplete="off" placeholder="Сообщение">
+        <input id="chat-input" maxlength="200" autocomplete="off" placeholder="${isBattle ? "Сообщение участникам боя" : "Сообщение"}">
         <button type="submit">➤</button>
       </form>
       <div class="error" id="chat-error"></div>
@@ -34,7 +36,8 @@
   const KEY = "hb.chatCollapsed";
   let collapsed;
   try { collapsed = localStorage.getItem(KEY); } catch {}
-  if (document.body.dataset.chatStart === "collapsed") setCollapsed(true, false);
+  if (isBattle) setCollapsed(false, false);
+  else if (document.body.dataset.chatStart === "collapsed") setCollapsed(true, false);
   else setCollapsed(collapsed === null || collapsed === undefined ? innerWidth < 760 : collapsed === "1");
   q(".chat-head").onclick = () => setCollapsed(!root.classList.contains("collapsed"));
 
@@ -93,6 +96,17 @@
       const msg = JSON.parse(e.data);
       // Game events (challenge list, battle updates) for the page scripts.
       window.dispatchEvent(new CustomEvent("hb:ws", { detail: msg }));
+      if (isBattle) {
+        if (msg.type === "hello") ws.send(JSON.stringify({ type: "battle-history" }));
+        if (msg.type === "battle-history") {
+          log.replaceChildren();
+          msg.history.forEach(addMessage);
+          if (!msg.history.length) addMessage({ kind: "system", text: "Здесь пишут только участники этого боя.", createdAt: new Date().toISOString() });
+          log.scrollTop = log.scrollHeight;
+        } else if (msg.type === "battle-message") addMessage(msg.message);
+        else if (msg.type === "error") showError(msg.error);
+        return;
+      }
       if (msg.type === "hello") {
         log.replaceChildren();
         msg.history.forEach(addMessage);
@@ -117,7 +131,7 @@
     e.preventDefault();
     const text = input.value.trim();
     if (!text || ws?.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: "chat", text }));
+    ws.send(JSON.stringify({ type: "chat", text, ...(isBattle ? { channel: "battle" } : {}) }));
     input.value = "";
   };
 

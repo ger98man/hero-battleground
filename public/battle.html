@@ -9,37 +9,47 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/social.css">
+  <link rel="stylesheet" href="/battle.css">
 </head>
-<body class="battle-page" data-chat-start="collapsed">
-<div class="battle">
-  <header class="battle-top">
-    <div class="unit-panel" id="panel-player"></div>
-    <div class="center-col"><div class="round" id="round"></div><span id="topbar-online"></span></div>
-    <div class="unit-panel right" id="panel-bot"></div>
+<body class="battle-page" data-chat="battle">
+<div class="bf">
+  <header class="bf-top">
+    <div class="side-card" id="panel-player"></div>
+    <div class="bf-center">
+      <div class="queue" id="queue" title="Очередь ходов по инициативе"></div>
+      <div class="round" id="round"></div>
+    </div>
+    <div class="side-card right" id="panel-bot"></div>
   </header>
 
-  <div class="battle-mid">
-    <div class="board"><div class="grid" id="grid"></div></div>
-    <aside class="panel log-box">
-      <h2 class="panel-title">Журнал боя</h2>
-      <div class="log" id="log"></div>
+  <div class="bf-mid">
+    <div class="board" id="board"><div class="grid" id="grid"></div></div>
+    <aside class="bf-side" id="bf-side">
+      <div class="side-tabs">
+        <button type="button" data-pane="log" class="active">Журнал</button>
+        <button type="button" data-pane="chat">Боевой чат</button>
+      </div>
+      <div class="side-pane log" id="log"></div>
+      <div class="side-pane chat-pane hidden" id="chat-slot"></div>
     </aside>
   </div>
 
-  <footer class="battle-bottom">
-    <div class="panel artifact-mini" id="artifact-mini"></div>
-    <div class="panel action-panel">
+  <footer class="bf-bottom">
+    <div class="actor-card" id="actor-card"></div>
+    <div class="action-panel">
       <div class="economy" id="economy"></div>
       <div class="skillbar" id="skillbar"></div>
-      <div class="muted hint" id="hint"></div>
-      <div class="error" id="error"></div>
+      <div class="hint-row"><span class="hint" id="hint"></span><span class="error" id="error"></span></div>
     </div>
     <div class="end-col">
       <button type="button" id="end-turn" class="btn-end-turn"><span class="hourglass">⌛</span>Конец хода</button>
-      <button type="button" class="link" id="surrender">Сдаться</button>
+      <div class="end-row">
+        <button type="button" class="small-btn" id="auto" aria-pressed="false" title="ИИ ходит за вашего героя и отряды, пока не выключите">⚙ Авто бой</button>
+        <button type="button" class="small-btn" id="side-toggle" title="Журнал и боевой чат">📜</button>
+        <button type="button" class="small-btn" id="surrender" title="Сдаться">🏳</button>
+      </div>
     </div>
   </footer>
-  <section class="chat-slot" id="chat-slot"></section>
 </div>
 
 <div class="modal hidden" id="result">
@@ -52,8 +62,8 @@
     </div>
   </div>
 </div>
+<script src="/models.js"></script>
 <script src="/battle.js"></script>
-<script src="/online.js"></script>
 <script src="/chat.js"></script>
 </body>
 </html>

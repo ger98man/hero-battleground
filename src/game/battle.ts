@@ -64,6 +64,8 @@ export interface Unit {
   talents: string[];
   mods: PassiveMods;
   lastStandUsed: boolean;
+  /** Which faction hero figure to draw (client only). */
+  figure?: { faction: string; hero: string };
 }
 
 /** A stack of identical creatures from the hero's army. `id` is stable for the whole battle. */
@@ -182,6 +184,8 @@ export interface Fighter {
   profile: CombatProfile;
   /** Army stacks the hero brings (optional). */
   army?: ArmyStack[];
+  /** Faction hero figure for the battle screen (optional). */
+  figure?: { faction: string; hero: string };
 }
 
 function makeStacks(side: Side, army: ArmyStack[], column: number, prefix: string): Stack[] {
@@ -249,6 +253,7 @@ function makeUnit(side: Side, f: Fighter, x: number, y: number): Unit {
     talents: [...p.talents],
     mods: { ...p.mods },
     lastStandUsed: false,
+    ...(f.figure ? { figure: f.figure } : {}),
   };
 }
 

@@ -249,7 +249,8 @@ export async function joinChallenge(userId: number, challengeId: number): Promis
 
 function fighterOf(hero: HeroRow) {
   if (!hero.build.classes.length) return null;
-  return { name: hero.name, level: hero.level, army: hero.army, profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } };
+  const figure = hero.faction && hero.faction_hero ? { faction: hero.faction, hero: hero.faction_hero } : undefined;
+  return { name: hero.name, level: hero.level, army: hero.army, figure, profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } };
 }
 
 async function expireOld(db: Db): Promise<number> {
