@@ -12,8 +12,11 @@
       </form>
       <div class="error" id="chat-error"></div>
     </div>`;
-  document.body.append(root);
-  document.body.classList.add("has-chat");
+  // Pages give the chat its own place in the layout (#chat-slot), so it never covers other blocks.
+  const slot = document.getElementById("chat-slot");
+  root.classList.toggle("docked", Boolean(slot));
+  (slot ?? document.body).append(root);
+  if (!slot) document.body.classList.add("has-chat");
 
   const q = (sel) => root.querySelector(sel);
   const log = q("#chat-log");
