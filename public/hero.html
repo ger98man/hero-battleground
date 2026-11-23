@@ -4,58 +4,112 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hero Battleground — герой</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/social.css">
 </head>
 <body>
-<main class="wide">
-  <div class="row">
-    <h1><span id="hero-name">…</span> <small class="muted" id="class-title"></small></h1>
-    <span>
-      <a class="link nav-link" href="/pvp">⚔️ PvP-заявки</a>
-      <a class="link" href="/wiki">Об игре</a>
-      <button class="link" id="logout">Выйти</button>
-    </span>
-  </div>
-  <div class="hero-layout">
-    <div class="card">
-      <div class="row">
-        <b id="level"></b>
-        <span class="muted" id="xp-text"></span>
-      </div>
-      <div class="xp"><div id="xp-bar" style="width:0"></div></div>
-      <div class="muted" id="class-line"></div>
-      <div class="stats" id="stats"></div>
-      <div class="stats" id="derived"></div>
-      <div class="stats">
-        <div class="stat"><span>PvP: победы / поражения</span><b id="pvp"></b></div>
-        <div class="stat"><span>Бот: победы / поражения</span><b id="bot"></b></div>
-      </div>
-      <button type="button" id="fight" class="full">В бой против бота</button>
-      <a class="button-link full" href="/pvp">⚔️ PvP 1×1: заявки на бой</a>
-      <div class="error" id="fight-error"></div>
+<header class="topbar" id="topbar" data-page="hero"></header>
+<main class="page home">
+  <div class="home-grid">
+    <div class="home-main">
+      <section class="panel char-panel">
+        <h2 class="panel-title">Ваш персонаж</h2>
+        <div class="char-top">
+          <div class="char-portrait">
+            <div class="portrait" id="portrait"><span class="portrait-icon" id="portrait-icon">⚔️</span></div>
+          </div>
+          <div class="char-info">
+            <h1 class="char-name">★ <span id="hero-name">…</span></h1>
+            <div class="info-row">Фракция: <span id="faction-line"></span></div>
+            <div class="info-row">Герой: <b id="class-title"></b></div>
+            <div class="info-row"><b id="level"></b> <span class="muted" id="xp-text"></span></div>
+            <div class="xp"><div id="xp-bar" style="width:0"></div></div>
+            <div class="info-row muted" id="class-line"></div>
+            <div class="info-sep"></div>
+            <div class="info-row">⚔ PvP: <b id="pvp"></b> <span class="muted">победы / поражения</span></div>
+            <div class="info-row">🛡 Боты: <b id="bot"></b> <span class="muted">победы / поражения</span></div>
+          </div>
+          <div class="char-stats">
+            <div class="stat-list compact" id="stats"></div>
+          </div>
+          <div class="char-relic" id="relic-box"></div>
+        </div>
+        <div class="char-bottom">
+          <div class="vitals" id="vitals"></div>
+          <div class="derived" id="derived"></div>
+        </div>
+        <div class="char-army hidden" id="army-panel">
+          <div class="army-label">⚑ Армия:<br><b id="army-total"></b></div>
+          <div class="army-strip" id="army-strip"></div>
+          <div class="army-links">
+            <a href="/army">Набор армии »</a>
+            <button type="button" class="link" id="change-hero">Сменить героя »</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel build-panel">
+        <div class="tabs" id="tabs">
+          <button type="button" data-tab="classes" class="active">Направления</button>
+          <button type="button" data-tab="skills">Умения</button>
+          <button type="button" data-tab="talents">Таланты</button>
+          <button type="button" data-tab="relic">Реликвия</button>
+        </div>
+        <div id="tab-body"></div>
+        <div class="error" id="build-error"></div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title">Герои по фракциям</h2>
+        <div class="faction-columns" id="factions-overview"></div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title">Армии фракций</h2>
+        <div class="armies-table" id="armies-overview"></div>
+      </section>
     </div>
-    <div class="card">
-      <div class="tabs" id="tabs">
-        <button type="button" data-tab="classes" class="active">Классы</button>
-        <button type="button" data-tab="skills">Умения</button>
-        <button type="button" data-tab="talents">Таланты</button>
-        <button type="button" data-tab="relic">Реликвия</button>
-      </div>
-      <div id="tab-body"></div>
-      <div class="error" id="build-error"></div>
-    </div>
+
+    <aside class="home-side">
+      <section class="panel side-panel">
+        <h2 class="panel-title">Сражения</h2>
+        <button type="button" id="fight" class="btn-fight">⚔ В бой с ботом</button>
+        <div class="error" id="fight-error"></div>
+      </section>
+      <section class="panel side-panel">
+        <h2 class="panel-title">Сервисы</h2>
+        <nav class="services">
+          <a href="/army"><span>⚑</span>Набор армии</a>
+          <a href="/pvp"><span>⚔</span>Арена (PvP)</a>
+          <a href="/wiki"><span>📜</span>Об игре</a>
+          <a href="/wiki/changelog"><span>📰</span>Изменения</a>
+          <a href="/wiki/factions"><span>🏰</span>Фракции и армия</a>
+        </nav>
+      </section>
+      <section class="panel side-panel">
+        <h2 class="panel-title">Новости</h2>
+        <ul class="news" id="news"><li class="muted">Загрузка…</li></ul>
+      </section>
+    </aside>
   </div>
 </main>
 
-<div class="modal hidden" id="class-modal">
-  <div class="modal-box">
-    <h2>Выберите базовый класс</h2>
-    <p class="muted">Класс определяет умения и характеристики. На 3-м уровне появится очко класса, на 6-м — второй класс (гибрид, например Воин + Монах = Паладин). Менять можно в любой момент вне боя.</p>
-    <div class="artifact-list" id="class-list"></div>
-    <div class="error" id="modal-error"></div>
+<div class="modal hidden" id="faction-modal">
+  <div class="modal-box wide-box">
+    <h2 class="panel-title" id="faction-modal-title">Выберите фракцию</h2>
+    <p class="muted" id="faction-modal-hint">Фракция выбирается один раз: от неё зависят герой и войска. Героя внутри фракции можно сменить позже.</p>
+    <div class="faction-tabs" id="faction-tabs"></div>
+    <div id="faction-body"></div>
+    <div class="row gap"><button type="button" class="link hidden" id="faction-close">Закрыть</button></div>
+    <div class="error" id="faction-error"></div>
   </div>
 </div>
+
+<script src="/topbar.js"></script>
+<script src="/models.js"></script>
 <script src="/hero.js"></script>
 <script src="/online.js"></script>
 <script src="/chat.js"></script>

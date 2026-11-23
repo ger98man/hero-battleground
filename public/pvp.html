@@ -4,31 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hero Battleground — PvP-заявки</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/social.css">
 </head>
 <body>
-<main class="wide">
-  <div class="row">
-    <h1>PvP 1×1: заявки на бой</h1>
-    <span>
-      <a class="link nav-link" href="/hero">Герой</a>
-      <a class="link" href="/wiki">Об игре</a>
-    </span>
-  </div>
-  <section class="card pvp-card" id="pvp-card">
-    <div class="row wrap">
-      <b id="my-level"></b>
-      <label class="check"><input type="checkbox" id="only-my-level" checked> Только мой уровень</label>
+<header class="topbar" id="topbar" data-page="pvp"></header>
+<main class="page">
+  <section class="panel arena">
+    <h2 class="panel-title">Арена</h2>
+    <div class="arena-layout">
+      <nav class="mode-list" aria-label="Режимы боя">
+        <div class="mode active"><span class="mode-icon">⚔</span>Дуэль (1 × 1)</div>
+        <div class="mode soon"><span class="mode-icon">👥</span>Пара (2 × 2)<small>скоро</small></div>
+        <div class="mode soon"><span class="mode-icon">🛡</span>Тройка (3 × 3)<small>скоро</small></div>
+      </nav>
+      <div class="pvp-card" id="pvp-card">
+        <div class="row wrap">
+          <b class="arena-level" id="my-level"></b>
+          <label class="check"><input type="checkbox" id="only-my-level" checked> Только мой уровень</label>
+        </div>
+        <p class="muted" id="pvp-rules"></p>
+        <div id="my-challenge"></div>
+        <button type="button" id="create-challenge" class="btn-fight">⚔ Создать заявку</button>
+        <div class="error" id="challenge-error"></div>
+        <h3 class="section-title">Заявки героев</h3>
+        <ul class="challenge-list" id="challenge-list"></ul>
+      </div>
     </div>
-    <p class="muted" id="pvp-rules"></p>
-    <div id="my-challenge"></div>
-    <button type="button" id="create-challenge">Создать заявку</button>
-    <div class="error" id="challenge-error"></div>
-    <ul class="challenge-list" id="challenge-list"></ul>
-    <p class="muted">2×2 и 3×3: скоро</p>
   </section>
 </main>
+<script src="/topbar.js"></script>
 <script src="/challenges.js"></script>
 <script src="/online.js"></script>
 <script src="/chat.js"></script>

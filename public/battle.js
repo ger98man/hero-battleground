@@ -25,9 +25,9 @@ function secondsLeft() {
 function renderRound() {
   const s = battle.state;
   const left = s.status === "active" ? secondsLeft() : null;
-  const whose = isPvp() && s.status === "active" ? (s.turn === "player" ? " · ваш ход" : " · ход соперника") : "";
+  const whose = isPvp() && s.status === "active" ? (s.turn === "player" ? "ваш ход" : "ход соперника") : "";
   const icon = (side) => (side === "player" ? battle.skills[0].icon : battle.botSkills[0].icon);
-  $("round").innerHTML = `<div>Раунд ${s.round}${whose}` +
+  $("round").innerHTML = `<div class="round-title">Раунд ${s.round}</div><div class="round-sub">${whose}` +
     (left === null ? "" : `<span class="turn-timer ${left <= 10 ? "low" : ""}">⏱ ${left} с</span>`) +
     `</div><div class="queue" title="Очередь ходов по инициативе">${battle.queue
       .map((side, i) => `<span class="q ${side} ${i === 0 ? "now" : ""}">${icon(side)}</span>`).join("")}</div>`;
@@ -46,7 +46,7 @@ function bar(cur, max, cls, label) {
   return `<div class="bar ${cls}"><div style="width:${pct}%"></div><span>${label ?? `${cur} / ${max}`}</span></div>`;
 }
 
-function unitPanel(u) {
+function unitPanel(u, side) {
   const effects = [
     u.stunned ? "💫 оглушён" : null,
     u.stunImmune ? "🧿 устойчив к контролю" : null,
@@ -54,11 +54,11 @@ function unitPanel(u) {
   ].filter(Boolean).join(" · ");
   const pa = u.armor.physical;
   const ma = u.armor.magic;
-  return `<div class="unit-name"><b>${esc(u.name)}</b> <span class="muted">ур. ${u.level} · ${esc(u.className)}</span></div>
+  return `<div class="unit-portrait ${side}">${unitIcon(side)}</div><div class="unit-info"><div class="unit-name"><b>${esc(u.name)}</b> <span class="muted">ур. ${u.level} · ${esc(u.className)}</span></div>
     ${bar(u.hp, u.maxHp, "hp", `❤️ ${u.hp} / ${u.maxHp}`)}
     <div class="armor-row">${bar(pa.current, pa.max, "parmor", `🛡️ ${pa.current} / ${pa.max}`)}${bar(ma.current, ma.max, "marmor", `🔷 ${ma.current} / ${ma.max}`)}</div>
     ${bar(u.mana, u.maxMana, "mana", `💧 ${u.mana} / ${u.maxMana}`)}
-    <div class="muted effects">${effects || "&nbsp;"}</div>`;
+    <div class="muted effects">${effects || "&nbsp;"}</div></div>`;
 }
 
 const unitIcon = (side) => (side === "player" ? battle.skills[0].icon : battle.botSkills[0].icon);
@@ -69,8 +69,8 @@ function render() {
   const foe = s.units.bot;
   const myTurn = s.status === "active" && s.turn === "player";
 
-  $("panel-player").innerHTML = unitPanel(me);
-  $("panel-bot").innerHTML = unitPanel(foe);
+  $("panel-player").innerHTML = unitPanel(me, "player");
+  $("panel-bot").innerHTML = unitPanel(foe, "bot");
   renderRound();
 
   const reachable = new Set(battle.reachable.map(([x, y]) => `${x},${y}`));

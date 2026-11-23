@@ -15,6 +15,8 @@ const STAT_SHORT = { strength: "Сила", dexterity: "Ловкость", intell
 let catalog = null;
 let hero = null;
 let tab = "classes";
+let factions = [];
+let pickedFaction = null;
 
 const classDef = (id) => catalog.classes.find((c) => c.id === id);
 const allSkills = () => {
@@ -67,24 +69,32 @@ async function saveBuild(build) {
 
 const cloneBuild = () => JSON.parse(JSON.stringify(hero.build));
 
+const STAT_ICONS = { strength: "✊", dexterity: "🪶", intellect: "📖", mastery: "🔮", initiative: "⏳", stamina: "🛡️" };
+
+function vitalBar(name, cls, value) {
+  return `<div class="vital"><span class="vital-name">${name}</span><div class="bar ${cls}"><div style="width:100%"></div><span>${value} / ${value}</span></div></div>`;
+}
+
 function render() {
   const h = hero;
   $("hero-name").textContent = h.name;
-  $("class-title").textContent = h.needsClass ? "" : h.className;
+  $("class-title").textContent = h.needsClass ? "Герой не выбран" : h.className;
+  renderFaction();
   $("level").textContent = `Уровень ${h.level}`;
-  $("xp-text").textContent = `${h.experience} / ${h.experienceToNext} опыта`;
+  $("xp-text").textContent = `(${h.experience} / ${h.experienceToNext} опыта)`;
   $("xp-bar").style.width = `${Math.min(100, (h.experience / h.experienceToNext) * 100)}%`;
   $("class-line").textContent = h.build.classes.map((c) => `${classDef(c.id).name} ${ROMAN[c.rank]}`).join(" + ");
   const p = h.profile;
   $("stats").innerHTML = p
-    ? Object.entries(catalog.statNames).map(([k, name]) => `<div class="stat" title="${esc(STAT_HINTS[k])}"><span>${name}</span><b>${p.stats[k]}</b></div>`).join("")
+    ? Object.entries(catalog.statNames).map(([k, name]) => `<div class="stat-row" title="${esc(STAT_HINTS[k])}">
+        <span class="stat-icon">${STAT_ICONS[k] ?? "•"}</span><span class="stat-name">${name}</span><b>${p.stats[k]}</b></div>`).join("")
+    : `<p class="muted">Выберите класс, чтобы увидеть характеристики.</p>`;
+  $("vitals").innerHTML = p
+    ? vitalBar("Здоровье", "hp", p.maxHp) + vitalBar("Физическая броня", "parmor", p.physicalArmor) +
+      vitalBar("Магическая броня", "marmor", p.magicArmor) + vitalBar("Мана", "mana", p.maxMana)
     : "";
   $("derived").innerHTML = p
     ? [
-        ["Здоровье", p.maxHp],
-        ["Мана", p.maxMana],
-        ["Физ. броня", p.physicalArmor],
-        ["Маг. броня", p.magicArmor],
         ["Перемещение", `${p.moveRange} кл.`],
         ["Скорость ходов", `+${Math.round(p.speedBonus * 100)}%`],
         ["Уклонение", `${Math.round(p.dodge * 100)}%`],
@@ -97,33 +107,25 @@ function render() {
   $("tab-body").innerHTML = { classes: classesTab, skills: skillsTab, talents: talentsTab, relic: relicTab }[tab]();
 }
 
+// Read-only: the class lines come from the faction hero and grow with the level.
 function classesTab() {
-  const { limits, build } = hero;
-  const free = limits.classPoints - limits.classPointsUsed;
-  const rows = build.classes.map((c, i) => {
-    const def = classDef(c.id);
-    const specOptions = def.specs.map((s) => `<option value="${s.id}" ${s.id === c.spec ? "selected" : ""}>${esc(s.name)}</option>`).join("");
-    const spec = def.specs.find((s) => s.id === c.spec);
-    return `<div class="class-row">
+  const f = factions.find((x) => x.id === hero.faction);
+  const fh = f?.heroes.find((x) => x.id === hero.factionHero);
+  if (!fh) return `<p class="muted">Выберите фракцию и героя, чтобы увидеть его боевые направления.</p>`;
+  const now = new Map(hero.build.classes.map((c) => [c.id, c.rank]));
+  const rows = fh.classes.map((line, i) => {
+    const def = classDef(line.id);
+    const spec = def.specs.find((s) => s.id === line.spec);
+    const rank = now.get(line.id);
+    return `<div class="class-row ${rank ? "" : "locked"}">
       <span class="icon big">${def.icon}</span>
-      <div class="grow"><b>${esc(def.name)} ${ROMAN[c.rank]}</b>
-        <div><select data-spec="${i}">${specOptions}</select></div>
-        <div class="muted">${esc(spec?.description ?? "")}</div></div>
-      <div class="rank-btns">
-        <button type="button" data-rank="${i}" data-delta="-1" ${c.rank <= 1 && build.classes.length === 1 ? "disabled" : ""}>−</button>
-        <button type="button" data-rank="${i}" data-delta="1" ${free <= 0 || c.rank >= catalog.rules.MAX_CLASS_RANK ? "disabled" : ""}>+</button>
-      </div></div>`;
+      <div class="grow"><b>${esc(def.name)} ${rank ? ROMAN[rank] : ""}</b> <span class="muted">${i === 0 ? "основное направление" : "второе направление"}</span>
+        <div>${esc(spec?.name ?? "")}: <span class="muted">${esc(spec?.description ?? "")}</span></div>
+        ${rank ? "" : `<div class="muted">🔒 Откроется на 6 уровне</div>`}</div></div>`;
   }).join("");
-  const canAdd = free > 0 && build.classes.length < limits.classSlots;
-  const addable = catalog.classes.filter((c) => !build.classes.some((b) => b.id === c.id));
-  const addHtml = addable.map((c) => `<button type="button" class="chip" data-add="${c.id}" ${!c.playable || !canAdd ? "disabled" : ""}
-      title="${esc(c.description)}">${c.icon} ${esc(c.name)}${c.playable ? "" : " (скоро)"}</button>`).join("");
-  const hybrids = hero.build.classes.length > 1 ? "" : `<p class="muted">На 6-м уровне откроется второй класс: Воин + Монах = Паладин, Воин + Маг = Боевой маг.</p>`;
-  return `<p class="muted">Очки классов: ${limits.classPointsUsed} / ${limits.classPoints} · классов: ${build.classes.length} / ${limits.classSlots}.
-      Очко даётся каждый 3-й уровень, новый класс — каждый 6-й (до ${catalog.rules.MAX_CLASSES}).</p>
-    ${rows}
-    <p><b>Добавить класс</b>${canAdd ? "" : ` <span class="muted">(нужно свободное очко и место под класс)</span>`}</p>
-    <div class="chips">${addHtml}</div>${hybrids}`;
+  return `<p class="muted">Боевые направления героя «${esc(fh.name)}» заданы фракцией. Ранг растёт сам: +1 каждый 3-й уровень,
+      второе направление (если есть) открывается на 6 уровне и получает треть рангов. От направлений зависят характеристики и умения.</p>
+    ${rows}`;
 }
 
 function skillsTab() {
@@ -165,9 +167,15 @@ function talentsTab() {
 function relicTab() {
   const r = hero.relic;
   if (!r) return "";
-  return `<div class="artifact-head"><span class="icon big">🗝️</span><div><b>${esc(r.name)}</b> <span class="muted">ступень ${r.tier}</span>
-    <div class="muted">Всегда с героем, не теряется. Свойства зависят от ваших классов.</div></div></div>
-    <p>${esc(r.effect)}</p>${r.nextTiers.map((t) => `<div class="muted">${esc(t)}</div>`).join("")}`;
+  const maxTier = r.tier + r.nextTiers.length;
+  const pips = Array.from({ length: maxTier }, (_, i) => `<span class="pip ${i < r.tier ? "on" : ""}"></span>`).join("");
+  return `<div class="relic"><div class="relic-art">🗡️</div><div class="relic-info">
+    <div class="relic-kind">Личная реликвия · всегда с героем, не теряется</div>
+    <h3>${esc(r.name)}</h3>
+    <div class="pips" title="Ступень ${r.tier} из ${maxTier}">${pips}<span class="muted">ступень ${r.tier}</span></div>
+    <p class="relic-effect">${esc(r.effect)}</p>
+    ${r.nextTiers.map((t) => `<div class="relic-next">🔒 ${esc(t)}</div>`).join("")}
+    <p class="muted">Свойства зависят от ваших классов.</p></div></div>`;
 }
 
 $("tabs").onclick = (e) => {
@@ -175,29 +183,9 @@ $("tabs").onclick = (e) => {
   if (t) { tab = t; render(); }
 };
 
-$("tab-body").onclick = (e) => {
-  const d = e.target.dataset;
-  const build = cloneBuild();
-  if (d.rank !== undefined) {
-    const c = build.classes[Number(d.rank)];
-    c.rank += Number(d.delta);
-    if (c.rank < 1) build.classes.splice(Number(d.rank), 1);
-    return saveBuild(build);
-  }
-  if (d.add) {
-    const def = classDef(d.add);
-    build.classes.push({ id: def.id, rank: 1, spec: def.specs[0].id });
-    return saveBuild(build);
-  }
-};
-
 $("tab-body").onchange = (e) => {
   const d = e.target.dataset;
   const build = cloneBuild();
-  if (d.spec !== undefined) {
-    build.classes[Number(d.spec)].spec = e.target.value;
-    return saveBuild(build);
-  }
   if (d.skill) {
     const current = new Set(hero.profile.skills);
     if (e.target.checked) current.add(d.skill); else current.delete(d.skill);
@@ -212,35 +200,6 @@ $("tab-body").onchange = (e) => {
   }
 };
 
-function openClassModal() {
-  $("class-list").innerHTML = catalog.classes.map((c) => {
-    const specs = c.specs.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
-    return `<div class="artifact-card ${c.playable ? "" : "locked"}">
-      <div class="artifact-head"><span class="icon big">${c.icon}</span><div><b>${esc(c.name)}</b>
-        <div class="muted">${esc(c.description)}</div></div></div>
-      ${c.playable
-        ? `<label>Специализация</label><select id="spec-${c.id}">${specs}</select>
-           <details><summary>Умения</summary>${[c.basic, ...c.skills].map((s) => skillHtml(s)).join("")}</details>
-           <button type="button" data-pick="${c.id}">Выбрать</button>`
-        : `<p class="muted">Скоро</p>`}
-    </div>`;
-  }).join("");
-  $("class-modal").classList.remove("hidden");
-}
-
-$("class-list").onclick = async (e) => {
-  const id = e.target.dataset.pick;
-  if (!id) return;
-  try {
-    const data = await api("/api/hero/build", { build: { classes: [{ id, rank: 1, spec: $(`spec-${id}`).value }], talents: [], loadout: [] } });
-    hero = { ...hero, ...data.hero };
-    $("class-modal").classList.add("hidden");
-    render();
-  } catch (err) {
-    $("modal-error").textContent = err.message;
-  }
-};
-
 $("fight").onclick = async () => {
   $("fight").disabled = true;
   const res = await fetch("/api/battle", { method: "POST" });
@@ -249,15 +208,12 @@ $("fight").onclick = async () => {
   $("fight").disabled = false;
 };
 
-$("logout").onclick = async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
-  location.assign("/login");
-};
-
 (async () => {
-  [catalog, { hero }] = await Promise.all([api("/api/classes"), api("/api/hero")]);
+  [catalog, { hero }, { factions }] = await Promise.all([api("/api/classes"), api("/api/hero"), api("/api/factions")]);
   render();
-  if (hero.needsClass) openClassModal();
+  renderOverviews();
+  renderNews();
+  if (!hero.factionHero) openFactionModal();
   checkOwnChallenge();
 })();
 
@@ -273,3 +229,144 @@ async function checkOwnChallenge() {
 window.addEventListener("hb:ws", (e) => {
   if (e.detail.type === "battle-start") location.assign("/battle");
 });
+
+// ---------- Faction, faction hero and army ----------
+const factionOf = (id) => factions.find((f) => f.id === id);
+const ROMAN_TIER = ["", "I", "II", "III", "IV", "V", "VI", "VII"];
+
+function renderFaction() {
+  const f = factionOf(hero.faction);
+  const fh = f?.heroes.find((x) => x.id === hero.factionHero);
+  $("portrait").innerHTML = fh
+    ? hbFigure(fh, f)
+    : `<span class="portrait-icon">${hero.build.classes[0] ? classDef(hero.build.classes[0].id).icon : "⚔️"}</span>`;
+  $("portrait").style.setProperty("--fc", f?.color ?? "transparent");
+  $("faction-line").innerHTML = f
+    ? `<a class="faction-name" style="--fc:${f.color}" href="/wiki/factions">${esc(f.name)}</a>`
+    : `<button type="button" class="link" id="pick-faction">не выбрана — выбрать</button>`;
+  if (!f) $("pick-faction").onclick = openFactionModal;
+  renderRelicBox(f, fh);
+  $("army-panel").classList.toggle("hidden", !f);
+  if (!f) return;
+  document.documentElement.style.setProperty("--faction", f.color);
+  const unitOf = (id) => f.tiers.flatMap((t) => t.units).find((u) => u.id === id);
+  const slots = Array.from({ length: hero.armyLimits.maxStacks }, (_, i) => hero.army[i]);
+  $("army-strip").innerHTML = slots.map((st) => {
+    const u = st && unitOf(st.unitId);
+    return u
+      ? `<a class="slot" href="/army" title="${esc(u.name)}">${hbFigure(u, f)}<span class="slot-count">${st.count}</span><span class="slot-tier">${ROMAN_TIER[u.tier]}</span></a>`
+      : `<a class="slot empty" href="/army" title="Пустой слот"></a>`;
+  }).join("");
+  const total = hero.army.reduce((sum, st) => sum + st.count, 0);
+  $("army-total").textContent = `${total} сущ.`;
+  $("army-total").title = `Лидерство ${hero.armyLimits.used} / ${hero.armyLimits.leadership}`;
+}
+
+// The faction hero's legendary relic and its three stages (stage = hero.relic.tier).
+function renderRelicBox(f, fh) {
+  if (!fh || !hero.relic) {
+    $("relic-box").innerHTML = `<div class="note">При создании персонажа вы выбираете фракцию и одного из её четырёх героев.
+      У каждого героя своя легендарная реликвия, она усиливается по мере развития.</div>`;
+    return;
+  }
+  const stages = [1, 2, 3].map((n) => `<div class="relic-stage ${n <= hero.relic.tier ? "on" : ""}">
+      <div class="token">${hbFigure(fh, f)}</div><span>${"★".repeat(n)}</span></div>`).join('<span class="arrow">→</span>');
+  $("relic-box").innerHTML = `<div class="relic-title">Легендарная реликвия:</div>
+    <div class="relic-name">${esc(fh.relic.name)}</div>
+    <div class="relic-stages">${stages}</div>
+    <div class="note">${esc(fh.relic.description)} Реликвия всегда с героем и не теряется.</div>`;
+}
+
+// Static overviews from the faction catalog: heroes by faction, armies by faction.
+function renderOverviews() {
+  $("factions-overview").innerHTML = factions.map((f) => `
+    <div class="faction-col" style="--fc:${f.color}">
+      <div class="faction-banner"><span class="banner"></span>${esc(f.name)}</div>
+      ${f.heroes.map((h) => `<div class="hero-row ${h.id === hero.factionHero ? "current" : ""}">
+        <div class="token">${hbFigure(h, f)}</div>
+        <div><b>${esc(h.name)}</b><div class="muted">Реликвия: <span class="relic-link" title="${esc(h.relic.description)}">${esc(h.relic.name)}</span></div></div>
+      </div>`).join("")}
+    </div>`).join("");
+  $("armies-overview").innerHTML = factions.map((f) => `
+    <div class="army-row" style="--fc:${f.color}">
+      <div class="faction-banner"><span class="banner"></span>${esc(f.name)}</div>
+      ${f.tiers.map((t) => `<div class="tier-cell" title="${t.units.map((u) => esc(u.name)).join(" / ")}">
+        <div class="tier-pics">${t.units.map((u) => `<div class="token">${hbFigure(u, f)}</div>`).join("")}</div>
+        <div class="tier-names">${t.tier}. ${t.units.map((u) => esc(u.name)).join(", ")}</div>
+      </div>`).join("")}
+    </div>`).join("");
+}
+
+// Latest changelog entries as news.
+async function renderNews() {
+  try {
+    const page = await api("/api/wiki/changelog");
+    const doc = new DOMParser().parseFromString(page.html, "text/html");
+    const items = [...doc.querySelectorAll("h2")].slice(0, 5).map((h) => `<li><a href="/wiki/changelog">${esc(h.textContent)}</a></li>`);
+    $("news").innerHTML = items.join("") || `<li class="muted">Пока пусто</li>`;
+  } catch {
+    $("news").innerHTML = `<li class="muted">Не удалось загрузить</li>`;
+  }
+}
+
+function openFactionModal() {
+  pickedFaction = hero.faction ?? pickedFaction ?? factions[0].id;
+  const locked = Boolean(hero.faction);
+  $("faction-modal-title").textContent = locked ? "Сменить героя фракции" : "Выберите фракцию и героя";
+  $("faction-modal-hint").textContent = locked
+    ? "Фракция уже выбрана. Героя внутри неё можно сменить, армия останется прежней."
+    : "Фракция выбирается один раз: от неё зависят герой и войска. Героя внутри фракции можно будет сменить позже.";
+  $("faction-close").classList.toggle("hidden", !locked);
+  $("faction-error").textContent = "";
+  renderFactionModal();
+  $("faction-modal").classList.remove("hidden");
+}
+
+function renderFactionModal() {
+  const locked = Boolean(hero.faction);
+  $("faction-tabs").innerHTML = factions.map((f) => `<button type="button" class="faction-tab ${f.id === pickedFaction ? "active" : ""}"
+      style="--fc:${f.color}" data-faction="${f.id}" ${locked && f.id !== hero.faction ? "disabled" : ""}>
+      <span class="banner"></span><b>${esc(f.name)}</b><small>${esc(f.motto)}</small></button>`).join("");
+  const f = factionOf(pickedFaction);
+  const preview = f.tiers.map((t) => t.units[0]);
+  $("faction-body").innerHTML = `
+    <p class="faction-desc">${esc(f.description)}</p>
+    <div class="hero-choices">${f.heroes.map((h) => `
+      <article class="hero-choice ${h.id === hero.factionHero ? "current" : ""}" style="--fc:${f.color}">
+        <div class="token big">${hbFigure(h, f)}</div>
+        <b>${esc(h.name)}</b><span class="muted">${esc(h.title)}</span>
+        <p>${esc(h.description)}</p>
+        <div class="relic-line" title="${esc(h.relic.description)}">🗡️ ${esc(h.relic.name)}</div>
+        <div class="muted">${esc(h.relic.description)}</div>
+        <div class="bonus-line">${esc(h.armyBonus)}</div>
+        <button type="button" class="btn-primary" data-hero="${h.id}" ${h.id === hero.factionHero ? "disabled" : ""}>
+          ${h.id === hero.factionHero ? "Ваш герой" : "Выбрать"}</button>
+      </article>`).join("")}</div>
+    <h3 class="section-title">Войска фракции</h3>
+    <div class="army-strip preview">${preview.map((u) => `<div class="slot" title="${esc(u.name)}">${hbFigure(u, f)}<span class="slot-tier">${ROMAN_TIER[u.tier]}</span></div>`).join("")}</div>`;
+}
+
+$("faction-tabs").onclick = (e) => {
+  const id = e.target.closest("button")?.dataset.faction;
+  if (!id) return;
+  pickedFaction = id;
+  renderFactionModal();
+};
+
+$("faction-body").onclick = async (e) => {
+  const heroId = e.target.closest("button")?.dataset.hero;
+  if (!heroId) return;
+  $("faction-error").textContent = "";
+  try {
+    const data = await api("/api/hero/faction", { faction: pickedFaction, hero: heroId });
+    hero = { ...hero, ...data.hero };
+    $("faction-modal").classList.add("hidden");
+    render();
+    renderOverviews();
+  } catch (err) {
+    $("faction-error").textContent = err.message;
+  }
+};
+
+$("faction-close").onclick = () => $("faction-modal").classList.add("hidden");
+$("change-hero").onclick = openFactionModal;

@@ -1,23 +1,36 @@
-/* Online counter + global chat (placeholder look, design comes later) */
-.online-badge { position: fixed; top: 8px; right: 12px; z-index: 20; font-size: 13px; color: #9aa0ab;
-  background: #1f2229; border: 1px solid #2d313a; border-radius: 6px; padding: 4px 10px; }
-.online-badge b { color: #e8e8ea; }
+/* Online counter + global chat, in the same gold-framed style as the panels (tokens from style.css). */
+.online-badge {
+  position: fixed; top: 8px; right: 12px; z-index: 20; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);
+  background: linear-gradient(180deg, #221b13, #120e0a); border: 1px solid var(--gold-dark); border-radius: var(--radius); padding: 4px 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+.online-badge.in-bar { position: static; }
+.online-badge b { color: var(--gold-hi); }
+.online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
 
-.chat { position: fixed; left: 12px; bottom: 12px; z-index: 20; width: 360px; max-width: calc(100vw - 24px);
-  background: #1f2229; border: 1px solid #2d313a; border-radius: 8px; display: flex; flex-direction: column; }
-.chat-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; cursor: pointer; user-select: none; }
-.chat-head b { font-size: 14px; }
-.chat-body { display: flex; flex-direction: column; height: 300px; padding: 0 12px 12px; }
+.chat {
+  position: fixed; left: 12px; bottom: 12px; z-index: 20; width: 360px; max-width: calc(100vw - 24px); display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(29, 23, 17, .97), rgba(15, 12, 9, .97)); border: 1px solid var(--gold-dark); border-radius: var(--radius);
+  box-shadow: var(--frame);
+}
+.chat-head {
+  display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; cursor: pointer; user-select: none;
+  border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(201, 164, 92, .14), rgba(0, 0, 0, 0));
+}
+.chat.collapsed .chat-head { border-bottom: 0; }
+.chat-head b { font-family: var(--font-head); font-size: 17px; color: var(--gold-hi); }
+.chat-head b::before { content: "💬 "; font-size: 14px; }
+.chat-body { display: flex; flex-direction: column; height: 300px; padding: 8px 12px 12px; }
 .chat.collapsed .chat-body { display: none; }
 .chat-log { list-style: none; margin: 0 0 8px; padding: 0; overflow-y: auto; flex: 1; font-size: 13px; }
 .chat-log li { padding: 2px 0; overflow-wrap: anywhere; }
-.chat-log time { color: #6b7180; font-size: 11px; margin-right: 6px; font-variant-numeric: tabular-nums; }
-.chat-log a { color: #8ea4ff; text-decoration: none; }
+.chat-log time { color: #75684f; font-size: 11px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+.chat-log a { color: var(--gold-hi); text-decoration: none; font-weight: 700; }
 .chat-log a:hover { text-decoration: underline; }
-.chat-log .system { color: #d9b45b; font-style: italic; }
+.chat-log .system { color: var(--gold); font-style: italic; }
 .chat-form { display: flex; gap: 6px; }
-.chat-form input { flex: 1; min-width: 0; padding: 8px; font-size: 14px; }
-.chat-form button[type=submit] { flex: none; width: auto; margin: 0; padding: 8px 12px; }
+.chat-form input { flex: 1; min-width: 0; padding: 7px 8px; font-size: 14px; }
+.chat-form button[type=submit] { flex: none; width: auto; margin: 0; padding: 6px 12px; font-size: 15px; }
 .chat .error { min-height: 0; margin: 4px 0 0; font-size: 12px; }
 /* keep page content clear of the chat on small screens */
 @media (max-width: 760px) { body.has-chat { padding-bottom: 60px; } }

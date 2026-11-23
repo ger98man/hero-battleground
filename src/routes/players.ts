@@ -2,7 +2,9 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../session.js";
 import { onlineCount } from "../realtime/chat.js";
-import { overallClass, parseBuild } from "../game/build.js";
+import { parseBuild } from "../game/build.js";
+import { heroTitle } from "../services/heroes.js";
+import { factionHeroOf, heroClasses } from "../game/factions.js";
 import { getClass } from "../game/classes.js";
 
 export const playersRouter = Router();
@@ -15,7 +17,7 @@ playersRouter.get("/online", (_req, res) => {
 /** Another player's hero, opened by clicking a name in chat. */
 playersRouter.get("/heroes/:name", requireAuth, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT name, level, build, wins, losses, bot_wins AS "botWins", bot_losses AS "botLosses", created_at AS "createdAt"
+    `SELECT name, level, build, faction, faction_hero AS "factionHero", wins, losses, bot_wins AS "botWins", bot_losses AS "botLosses", created_at AS "createdAt"
        FROM heroes WHERE lower(name) = lower($1)`,
     [req.params.name],
   );
@@ -24,11 +26,12 @@ playersRouter.get("/heroes/:name", requireAuth, async (req, res) => {
     return;
   }
   const { build, ...hero } = rows[0];
-  const b = parseBuild(build);
+  const factionHero = factionHeroOf({ faction: hero.faction, heroId: hero.factionHero });
+  const b = { ...parseBuild(build), classes: factionHero ? heroClasses({ hero: factionHero, level: hero.level }) : [] };
   res.json({
     hero: {
       ...hero,
-      className: overallClass(b).name,
+      className: heroTitle({ faction: hero.faction, factionHero: hero.factionHero, build: b }),
       classes: b.classes.map((c) => ({ name: getClass(c.id)?.name ?? c.id, rank: c.rank })),
     },
   });

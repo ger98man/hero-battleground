@@ -22,7 +22,7 @@ import {
 import { randomBuild, simpleBot } from "../game/bot.js";
 import { combatProfile } from "../game/build.js";
 import { postSystemMessage } from "../realtime/chat.js";
-import { getHeroByUser, grantHeroBattleResult, type HeroRow } from "../services/heroes.js";
+import { getHeroByUser, grantHeroBattleResult, heroTitle, type HeroRow } from "../services/heroes.js";
 import {
   announcePvpResult,
   applyTimeout,
@@ -134,11 +134,11 @@ battleRouter.post("/", async (req, res) => {
   }
 
   if (!hero.build.classes.length) {
-    res.status(400).json({ error: "Сначала выберите класс" });
+    res.status(400).json({ error: "Сначала выберите фракцию и героя" });
     return;
   }
   const state = createBattle(
-    { name: hero.name, level: hero.level, profile: combatProfile(hero.level, hero.build) },
+    { name: hero.name, level: hero.level, profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } },
     {
       name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
       // The bot has the same level and a random legal build.
