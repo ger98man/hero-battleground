@@ -12,6 +12,7 @@ import {
   xpForNextLevel,
   type HeroBuild,
 } from "../game/build.js";
+import { armyCost, leadership, MAX_ARMY_STACKS, parseArmy, type ArmyStack } from "../game/factions.js";
 
 type Db = Pick<PoolClient, "query">;
 
@@ -25,27 +26,36 @@ export interface HeroRow {
   bot_wins: number;
   bot_losses: number;
   build: HeroBuild;
+  faction: string | null;
+  faction_hero: string | null;
+  army: ArmyStack[];
 }
 
 export async function getHeroByUser(userId: number, db: Db = pool, forUpdate = false): Promise<HeroRow | undefined> {
   const { rows } = await db.query<HeroRow>(
-    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build
+    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build, faction, faction_hero, army
        FROM heroes WHERE user_id = $1 ${forUpdate ? "FOR UPDATE" : ""}`,
     [userId],
   );
   const hero = rows[0];
-  if (hero) hero.build = parseBuild(hero.build);
+  if (hero) {
+    hero.build = parseBuild(hero.build);
+    hero.army = parseArmy(hero.army);
+  }
   return hero;
 }
 
 export async function getHeroById(heroId: number, db: Db = pool, forUpdate = false): Promise<HeroRow | undefined> {
   const { rows } = await db.query<HeroRow>(
-    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build
+    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build, faction, faction_hero, army
        FROM heroes WHERE id = $1 ${forUpdate ? "FOR UPDATE" : ""}`,
     [heroId],
   );
   const hero = rows[0];
-  if (hero) hero.build = parseBuild(hero.build);
+  if (hero) {
+    hero.build = parseBuild(hero.build);
+    hero.army = parseArmy(hero.army);
+  }
   return hero;
 }
 
@@ -77,6 +87,10 @@ export function heroView(hero: HeroRow) {
     profile,
     availableSkills: availableSkills(b).map((s) => s.id),
     relic: hasClass ? relicFor(b).view : null,
+    faction: hero.faction,
+    factionHero: hero.faction_hero,
+    army: hero.army,
+    armyLimits: { leadership: leadership(hero.level), used: armyCost(hero.army), maxStacks: MAX_ARMY_STACKS },
   };
 }
 

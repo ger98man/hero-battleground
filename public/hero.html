@@ -15,7 +15,8 @@
 <main class="page">
   <div class="hero-layout">
     <section class="panel portrait-panel">
-      <div class="portrait"><span class="portrait-icon" id="portrait-icon">⚔️</span></div>
+      <div class="portrait" id="portrait"><span class="portrait-icon" id="portrait-icon">⚔️</span></div>
+      <div class="faction-line" id="faction-line"></div>
       <div class="nameplate">
         <h1 id="hero-name">…</h1>
         <div class="class-title" id="class-title"></div>
@@ -47,6 +48,16 @@
     </section>
   </div>
 
+  <section class="panel army-panel" id="army-panel">
+    <h2 class="panel-title">Армия</h2>
+    <div class="army-strip" id="army-strip"></div>
+    <div class="army-links">
+      <span class="muted" id="army-total"></span>
+      <a href="/army" class="btn-secondary">Набор армии</a>
+      <button type="button" class="link" id="change-hero">Сменить героя фракции</button>
+    </div>
+  </section>
+
   <section class="panel build-panel">
     <div class="tabs" id="tabs">
       <button type="button" data-tab="classes" class="active">Классы</button>
@@ -59,6 +70,17 @@
   </section>
 </main>
 
+<div class="modal hidden" id="faction-modal">
+  <div class="modal-box wide-box">
+    <h2 class="panel-title" id="faction-modal-title">Выберите фракцию</h2>
+    <p class="muted" id="faction-modal-hint">Фракция выбирается один раз: от неё зависят герой и войска. Героя внутри фракции можно сменить позже.</p>
+    <div class="faction-tabs" id="faction-tabs"></div>
+    <div id="faction-body"></div>
+    <div class="row gap"><button type="button" class="link hidden" id="faction-close">Закрыть</button></div>
+    <div class="error" id="faction-error"></div>
+  </div>
+</div>
+
 <div class="modal hidden" id="class-modal">
   <div class="modal-box">
     <h2 class="panel-title">Выберите базовый класс</h2>
@@ -68,6 +90,7 @@
   </div>
 </div>
 <script src="/topbar.js"></script>
+<script src="/models.js"></script>
 <script src="/hero.js"></script>
 <script src="/online.js"></script>
 <script src="/chat.js"></script>

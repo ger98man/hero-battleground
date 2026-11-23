@@ -8,6 +8,7 @@
   const isPublic = "public" in bar.dataset;
   const links = [
     ["hero", "/hero", "Герой"],
+    ["army", "/army", "Армия"],
     ["pvp", "/pvp", "Арена (PvP)"],
     ["wiki", "/wiki", "Об игре"],
   ];

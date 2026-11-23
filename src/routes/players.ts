@@ -15,7 +15,7 @@ playersRouter.get("/online", (_req, res) => {
 /** Another player's hero, opened by clicking a name in chat. */
 playersRouter.get("/heroes/:name", requireAuth, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT name, level, build, wins, losses, bot_wins AS "botWins", bot_losses AS "botLosses", created_at AS "createdAt"
+    `SELECT name, level, build, faction, faction_hero AS "factionHero", wins, losses, bot_wins AS "botWins", bot_losses AS "botLosses", created_at AS "createdAt"
        FROM heroes WHERE lower(name) = lower($1)`,
     [req.params.name],
   );

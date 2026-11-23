@@ -5,6 +5,7 @@ import { sessionMiddleware } from "./session.js";
 import { authRouter } from "./routes/auth.js";
 import { heroRouter } from "./routes/hero.js";
 import { classesRouter } from "./routes/classes.js";
+import { factionsRouter } from "./routes/factions.js";
 import { battleRouter } from "./routes/battle.js";
 import { challengesRouter } from "./routes/challenges.js";
 import { playersRouter } from "./routes/players.js";
@@ -28,6 +29,7 @@ export function createApp() {
   app.use("/api/hero", heroRouter);
   app.use("/api/wiki", wikiRouter);
   app.use("/api/classes", classesRouter);
+  app.use("/api/factions", factionsRouter);
   app.use("/api/battle", battleRouter);
   app.use("/api/challenges", challengesRouter);
   app.use("/api", playersRouter);
@@ -63,6 +65,11 @@ export function createApp() {
     if (!req.session.userId) return res.redirect("/login");
     if (await hasActiveBattle(req.session.userId)) return res.redirect("/battle");
     res.sendFile(path.join(publicDir, "pvp.html"));
+  });
+  app.get("/army", async (req, res) => {
+    if (!req.session.userId) return res.redirect("/login");
+    if (await hasActiveBattle(req.session.userId)) return res.redirect("/battle");
+    res.sendFile(path.join(publicDir, "army.html"));
   });
   app.get("/heroes/:name", (req, res) => {
     if (!req.session.userId) return res.redirect("/login");

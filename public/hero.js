@@ -15,6 +15,8 @@ const STAT_SHORT = { strength: "Сила", dexterity: "Ловкость", intell
 let catalog = null;
 let hero = null;
 let tab = "classes";
+let factions = [];
+let pickedFaction = null;
 
 const classDef = (id) => catalog.classes.find((c) => c.id === id);
 const allSkills = () => {
@@ -77,7 +79,7 @@ function render() {
   const h = hero;
   $("hero-name").textContent = h.name;
   $("class-title").textContent = h.needsClass ? "Класс не выбран" : h.className;
-  $("portrait-icon").textContent = h.build.classes[0] ? classDef(h.build.classes[0].id).icon : "⚔️";
+  renderFaction();
   $("level").textContent = `Ур. ${h.level}`;
   $("xp-text").textContent = `${h.experience} / ${h.experienceToNext}`;
   $("xp-bar").style.width = `${Math.min(100, (h.experience / h.experienceToNext) * 100)}%`;
@@ -264,9 +266,10 @@ $("fight").onclick = async () => {
 };
 
 (async () => {
-  [catalog, { hero }] = await Promise.all([api("/api/classes"), api("/api/hero")]);
+  [catalog, { hero }, { factions }] = await Promise.all([api("/api/classes"), api("/api/hero"), api("/api/factions")]);
   render();
-  if (hero.needsClass) openClassModal();
+  if (!hero.faction) openFactionModal();
+  else if (hero.needsClass) openClassModal();
   checkOwnChallenge();
 })();
 
@@ -282,3 +285,94 @@ async function checkOwnChallenge() {
 window.addEventListener("hb:ws", (e) => {
   if (e.detail.type === "battle-start") location.assign("/battle");
 });
+
+// ---------- Faction, faction hero and army ----------
+const factionOf = (id) => factions.find((f) => f.id === id);
+const ROMAN_TIER = ["", "I", "II", "III", "IV", "V", "VI", "VII"];
+
+function renderFaction() {
+  const f = factionOf(hero.faction);
+  const fh = f?.heroes.find((x) => x.id === hero.factionHero);
+  $("portrait").innerHTML = fh
+    ? hbModel(fh.model, f)
+    : `<span class="portrait-icon">${hero.build.classes[0] ? classDef(hero.build.classes[0].id).icon : "⚔️"}</span>`;
+  $("portrait").style.setProperty("--fc", f?.color ?? "transparent");
+  $("faction-line").innerHTML = f
+    ? `<span class="faction-name" style="--fc:${f.color}">${esc(f.name)}</span> · ${esc(fh?.name ?? "")}`
+    : "";
+  $("army-panel").classList.toggle("hidden", !f);
+  if (!f) return;
+  document.documentElement.style.setProperty("--faction", f.color);
+  const unitOf = (id) => f.tiers.flatMap((t) => t.units).find((u) => u.id === id);
+  const slots = Array.from({ length: hero.armyLimits.maxStacks }, (_, i) => hero.army[i]);
+  $("army-strip").innerHTML = slots.map((st) => {
+    const u = st && unitOf(st.unitId);
+    return u
+      ? `<a class="slot" href="/army" title="${esc(u.name)}">${hbModel(u.model, f)}<span class="slot-count">${st.count}</span><span class="slot-tier">${ROMAN_TIER[u.tier]}</span></a>`
+      : `<a class="slot empty" href="/army" title="Пустой слот"></a>`;
+  }).join("");
+  const total = hero.army.reduce((sum, st) => sum + st.count, 0);
+  $("army-total").textContent = `${total} существ · лидерство ${hero.armyLimits.used} / ${hero.armyLimits.leadership}`;
+}
+
+function openFactionModal() {
+  pickedFaction = hero.faction ?? pickedFaction ?? factions[0].id;
+  const locked = Boolean(hero.faction);
+  $("faction-modal-title").textContent = locked ? "Сменить героя фракции" : "Выберите фракцию и героя";
+  $("faction-modal-hint").textContent = locked
+    ? "Фракция уже выбрана. Героя внутри неё можно сменить, армия останется прежней."
+    : "Фракция выбирается один раз: от неё зависят герой и войска. Героя внутри фракции можно будет сменить позже.";
+  $("faction-close").classList.toggle("hidden", !locked);
+  $("faction-error").textContent = "";
+  renderFactionModal();
+  $("faction-modal").classList.remove("hidden");
+}
+
+function renderFactionModal() {
+  const locked = Boolean(hero.faction);
+  $("faction-tabs").innerHTML = factions.map((f) => `<button type="button" class="faction-tab ${f.id === pickedFaction ? "active" : ""}"
+      style="--fc:${f.color}" data-faction="${f.id}" ${locked && f.id !== hero.faction ? "disabled" : ""}>
+      <span class="banner"></span><b>${esc(f.name)}</b><small>${esc(f.motto)}</small></button>`).join("");
+  const f = factionOf(pickedFaction);
+  const preview = f.tiers.map((t) => t.units[0]);
+  $("faction-body").innerHTML = `
+    <p class="faction-desc">${esc(f.description)}</p>
+    <div class="hero-choices">${f.heroes.map((h) => `
+      <article class="hero-choice ${h.id === hero.factionHero ? "current" : ""}" style="--fc:${f.color}">
+        <div class="token big">${hbModel(h.model, f)}</div>
+        <b>${esc(h.name)}</b><span class="muted">${esc(h.title)}</span>
+        <p>${esc(h.description)}</p>
+        <div class="relic-line" title="${esc(h.relic.description)}">🗡️ ${esc(h.relic.name)}</div>
+        <div class="muted">${esc(h.relic.description)}</div>
+        <div class="bonus-line">${esc(h.armyBonus)}</div>
+        <button type="button" class="btn-primary" data-hero="${h.id}" ${h.id === hero.factionHero ? "disabled" : ""}>
+          ${h.id === hero.factionHero ? "Ваш герой" : "Выбрать"}</button>
+      </article>`).join("")}</div>
+    <h3 class="section-title">Войска фракции</h3>
+    <div class="army-strip preview">${preview.map((u) => `<div class="slot" title="${esc(u.name)}">${hbModel(u.model, f)}<span class="slot-tier">${ROMAN_TIER[u.tier]}</span></div>`).join("")}</div>`;
+}
+
+$("faction-tabs").onclick = (e) => {
+  const id = e.target.closest("button")?.dataset.faction;
+  if (!id) return;
+  pickedFaction = id;
+  renderFactionModal();
+};
+
+$("faction-body").onclick = async (e) => {
+  const heroId = e.target.closest("button")?.dataset.hero;
+  if (!heroId) return;
+  $("faction-error").textContent = "";
+  try {
+    const data = await api("/api/hero/faction", { faction: pickedFaction, hero: heroId });
+    hero = { ...hero, ...data.hero };
+    $("faction-modal").classList.add("hidden");
+    render();
+    if (hero.needsClass) openClassModal();
+  } catch (err) {
+    $("faction-error").textContent = err.message;
+  }
+};
+
+$("faction-close").onclick = () => $("faction-modal").classList.add("hidden");
+$("change-hero").onclick = openFactionModal;

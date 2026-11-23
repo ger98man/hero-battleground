@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hero Battleground — армия</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/social.css">
+</head>
+<body>
+<header class="topbar" id="topbar" data-page="army"></header>
+<main class="page">
+  <section class="panel army-head" id="army-head">
+    <h2 class="panel-title">Набор армии</h2>
+    <p class="muted" id="no-faction" hidden>Сначала выберите фракцию и героя на <a href="/hero">странице героя</a>.</p>
+    <div class="army-summary" id="army-summary"></div>
+    <div class="army-strip" id="army-slots"></div>
+    <div class="row wrap army-actions">
+      <button type="button" class="btn-secondary" id="army-even">Распределить поровну</button>
+      <button type="button" class="link" id="army-reset">Отменить изменения</button>
+      <button type="button" class="btn-primary" id="army-save">Сохранить армию</button>
+    </div>
+    <div class="error" id="army-error"></div>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel-title" id="roster-title">Войска фракции</h2>
+    <p class="muted">На каждой ступени два вида войск, можно взять оба. Новые ступени открываются с уровнем героя, лидерство растёт с каждым уровнем.
+      В бою армия пока не участвует.</p>
+    <div class="roster" id="roster"></div>
+  </section>
+</main>
+<script src="/topbar.js"></script>
+<script src="/models.js"></script>
+<script src="/army.js"></script>
+<script src="/online.js"></script>
+<script src="/chat.js"></script>
+</body>
+</html>
