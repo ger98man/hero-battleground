@@ -769,3 +769,9 @@ body .brand { text-decoration: none; }
 .wiki .overview { margin: 18px 0 24px; }
 .wiki .overview .faction-banner { font-size: 17px; }
 .wiki .overview .hero-row b { font-size: 17px; }
+.change-btn { width: 100%; margin: 6px 0 4px; padding: 5px 10px; font-size: 15px; }
+body:not(.battle-page) .services .service-btn {
+  display: flex; gap: 10px; align-items: center; padding: 5px 4px; font: inherit; font-size: 15px; text-align: left;
+  background: none; border: 0; border-bottom: 1px dashed var(--line); border-radius: 0; box-shadow: none; color: #7a2a14; text-decoration: underline; cursor: pointer;
+}
+.services .service-btn span { width: 24px; text-align: center; text-decoration: none; }

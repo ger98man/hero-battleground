@@ -290,21 +290,20 @@ async function renderNews() {
 
 function openFactionModal() {
   pickedFaction = hero.faction ?? pickedFaction ?? factions[0].id;
-  const locked = Boolean(hero.faction);
-  $("faction-modal-title").textContent = locked ? "Сменить героя фракции" : "Выберите фракцию и героя";
-  $("faction-modal-hint").textContent = locked
-    ? "Фракция уже выбрана. Героя внутри неё можно сменить, армия останется прежней."
-    : "Фракция выбирается один раз: от неё зависят герой и войска. Героя внутри фракции можно будет сменить позже.";
-  $("faction-close").classList.toggle("hidden", !locked);
+  const hasHero = Boolean(hero.factionHero);
+  $("faction-modal-title").textContent = hasHero ? "Сменить фракцию или героя" : "Выберите фракцию и героя";
+  $("faction-modal-hint").textContent = hasHero
+    ? "Сменить можно в любой момент вне боя, бесплатно. Новый герой той же фракции сохраняет армию, при смене фракции армия заменится стартовой армией новой фракции."
+    : "От фракции зависят герой и войска. Фракцию и героя можно будет сменить позже.";
+  $("faction-close").classList.toggle("hidden", !hasHero);
   $("faction-error").textContent = "";
   renderFactionModal();
   $("faction-modal").classList.remove("hidden");
 }
 
 function renderFactionModal() {
-  const locked = Boolean(hero.faction);
   $("faction-tabs").innerHTML = factions.map((f) => `<button type="button" class="faction-tab ${f.id === pickedFaction ? "active" : ""}"
-      style="--fc:${f.color}" data-faction="${f.id}" ${locked && f.id !== hero.faction ? "disabled" : ""}>
+      style="--fc:${f.color}" data-faction="${f.id}">
       <span class="banner"></span><b>${esc(f.name)}</b><small>${esc(f.motto)}</small></button>`).join("");
   const f = factionOf(pickedFaction);
   const preview = f.tiers.map((t) => t.units[0]);
@@ -319,7 +318,7 @@ function renderFactionModal() {
         <div class="muted">${esc(h.relic.description)}</div>
         <div class="bonus-line">${esc(h.armyBonus)}</div>
         <button type="button" class="btn-primary" data-hero="${h.id}" ${h.id === hero.factionHero ? "disabled" : ""}>
-          ${h.id === hero.factionHero ? "Ваш герой" : "Выбрать"}</button>
+          ${h.id === hero.factionHero ? "Ваш герой" : f.id === hero.faction || !hero.faction ? "Выбрать" : "Сменить фракцию"}</button>
       </article>`).join("")}</div>
     <h3 class="section-title">Войска фракции</h3>
     <div class="army-strip preview">${preview.map((u) => `<div class="slot" title="${esc(u.name)}">${hbFigure(u, f)}<span class="slot-tier">${ROMAN_TIER[u.tier]}</span></div>`).join("")}</div>`;
@@ -335,6 +334,8 @@ $("faction-tabs").onclick = (e) => {
 $("faction-body").onclick = async (e) => {
   const heroId = e.target.closest("button")?.dataset.hero;
   if (!heroId) return;
+  const changesFaction = hero.faction && hero.faction !== pickedFaction;
+  if (changesFaction && !confirm(`Сменить фракцию на «${factionOf(pickedFaction).name}»? Текущая армия будет заменена стартовой армией новой фракции.`)) return;
   $("faction-error").textContent = "";
   try {
     const data = await api("/api/hero/faction", { faction: pickedFaction, hero: heroId });
@@ -348,3 +349,5 @@ $("faction-body").onclick = async (e) => {
 
 $("faction-close").onclick = () => $("faction-modal").classList.add("hidden");
 $("change-hero").onclick = openFactionModal;
+$("change-faction").onclick = openFactionModal;
+$("side-change").onclick = openFactionModal;

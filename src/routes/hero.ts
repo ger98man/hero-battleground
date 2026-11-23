@@ -87,18 +87,17 @@ async function updateFactionState(userId: number, update: FactionUpdate): Promis
 }
 
 /**
- * Choose the faction (once, for good) and one of its four heroes (can be changed later).
- * Choosing the faction also gives the starting army.
+ * Choose the faction and one of its four heroes. Both can be changed any time outside battle, for free.
+ * A new faction replaces the army with that faction's starting army; a new hero of the same faction keeps it.
  */
 heroRouter.post("/faction", async (req, res) => {
   const factionId = String(req.body?.faction ?? "");
   const heroId = String(req.body?.hero ?? "");
   const { status, body } = await updateFactionState(req.session.userId ?? 0, (hero) => {
-    if (hero.faction && hero.faction !== factionId) return { error: "Фракцию выбирают один раз" };
     const faction = getFaction(factionId);
     if (!faction) return { error: "Нет такой фракции" };
     if (!getFactionHero(faction, heroId)) return { error: "У этой фракции нет такого героя" };
-    const army = hero.faction ? hero.army : defaultArmy({ faction: faction.id, level: hero.level });
+    const army = hero.faction === faction.id ? hero.army : defaultArmy({ faction: faction.id, level: hero.level });
     return { next: { faction: faction.id, faction_hero: heroId, army } };
   });
   res.status(status).json(body);

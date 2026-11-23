@@ -25,6 +25,7 @@
             <h1 class="char-name">★ <span id="hero-name">…</span></h1>
             <div class="info-row">Фракция: <span id="faction-line"></span></div>
             <div class="info-row">Герой: <b id="class-title"></b></div>
+            <button type="button" class="btn-secondary change-btn" id="change-faction">⇄ Сменить фракцию или героя</button>
             <div class="info-row"><b id="level"></b> <span class="muted" id="xp-text"></span></div>
             <div class="xp"><div id="xp-bar" style="width:0"></div></div>
             <div class="info-row muted" id="class-line"></div>
@@ -46,7 +47,7 @@
           <div class="army-strip" id="army-strip"></div>
           <div class="army-links">
             <a href="/army">Набор армии »</a>
-            <button type="button" class="link" id="change-hero">Сменить героя »</button>
+            <button type="button" class="link" id="change-hero">Сменить фракцию или героя »</button>
           </div>
         </div>
       </section>
@@ -74,6 +75,7 @@
         <h2 class="panel-title">Сервисы</h2>
         <nav class="services">
           <a href="/army"><span>⚑</span>Набор армии</a>
+          <button type="button" class="service-btn" id="side-change"><span>⇄</span>Сменить фракцию или героя</button>
           <a href="/pvp"><span>⚔</span>Арена (PvP)</a>
           <a href="/wiki"><span>📜</span>Об игре</a>
           <a href="/wiki/changelog"><span>📰</span>Изменения</a>
@@ -92,7 +94,7 @@
 <div class="modal hidden" id="faction-modal">
   <div class="modal-box wide-box">
     <h2 class="panel-title" id="faction-modal-title">Выберите фракцию</h2>
-    <p class="muted" id="faction-modal-hint">Фракция выбирается один раз: от неё зависят герой и войска. Героя внутри фракции можно сменить позже.</p>
+    <p class="muted" id="faction-modal-hint">От фракции зависят герой и войска. Фракцию и героя можно будет сменить позже.</p>
     <div class="faction-tabs" id="faction-tabs"></div>
     <div id="faction-body"></div>
     <div class="row gap"><button type="button" class="link hidden" id="faction-close">Закрыть</button></div>
