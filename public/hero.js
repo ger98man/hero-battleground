@@ -236,7 +236,7 @@ function renderFaction() {
   const f = factionOf(hero.faction);
   const fh = f?.heroes.find((x) => x.id === hero.factionHero);
   $("portrait").innerHTML = fh
-    ? hbModel(fh.model, f)
+    ? hbFigure(fh, f)
     : `<span class="portrait-icon">${hero.build.classes[0] ? classDef(hero.build.classes[0].id).icon : "⚔️"}</span>`;
   $("portrait").style.setProperty("--fc", f?.color ?? "transparent");
   $("faction-line").innerHTML = f
@@ -250,7 +250,7 @@ function renderFaction() {
   $("army-strip").innerHTML = slots.map((st) => {
     const u = st && unitOf(st.unitId);
     return u
-      ? `<a class="slot" href="/army" title="${esc(u.name)}">${hbModel(u.model, f)}<span class="slot-count">${st.count}</span><span class="slot-tier">${ROMAN_TIER[u.tier]}</span></a>`
+      ? `<a class="slot" href="/army" title="${esc(u.name)}">${hbFigure(u, f)}<span class="slot-count">${st.count}</span><span class="slot-tier">${ROMAN_TIER[u.tier]}</span></a>`
       : `<a class="slot empty" href="/army" title="Пустой слот"></a>`;
   }).join("");
   const total = hero.army.reduce((sum, st) => sum + st.count, 0);
@@ -281,7 +281,7 @@ function renderFactionModal() {
     <p class="faction-desc">${esc(f.description)}</p>
     <div class="hero-choices">${f.heroes.map((h) => `
       <article class="hero-choice ${h.id === hero.factionHero ? "current" : ""}" style="--fc:${f.color}">
-        <div class="token big">${hbModel(h.model, f)}</div>
+        <div class="token big">${hbFigure(h, f)}</div>
         <b>${esc(h.name)}</b><span class="muted">${esc(h.title)}</span>
         <p>${esc(h.description)}</p>
         <div class="relic-line" title="${esc(h.relic.description)}">🗡️ ${esc(h.relic.name)}</div>
@@ -291,7 +291,7 @@ function renderFactionModal() {
           ${h.id === hero.factionHero ? "Ваш герой" : "Выбрать"}</button>
       </article>`).join("")}</div>
     <h3 class="section-title">Войска фракции</h3>
-    <div class="army-strip preview">${preview.map((u) => `<div class="slot" title="${esc(u.name)}">${hbModel(u.model, f)}<span class="slot-tier">${ROMAN_TIER[u.tier]}</span></div>`).join("")}</div>`;
+    <div class="army-strip preview">${preview.map((u) => `<div class="slot" title="${esc(u.name)}">${hbFigure(u, f)}<span class="slot-tier">${ROMAN_TIER[u.tier]}</span></div>`).join("")}</div>`;
 }
 
 $("faction-tabs").onclick = (e) => {

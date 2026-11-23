@@ -74,7 +74,7 @@
     const over = used > lead();
     const heroDef = faction.heroes.find((h) => h.id === hero.factionHero);
     $("army-summary").innerHTML = `
-      <div class="army-hero">${heroDef ? `<div class="token">${hbModel(heroDef.model, faction)}</div>` : ""}
+      <div class="army-hero">${heroDef ? `<div class="token">${hbFigure(heroDef, faction)}</div>` : ""}
         <div><div class="faction-name" style="--fc:${faction.color}">${esc(faction.name)}</div>
           <b>${esc(heroDef?.name ?? "")}</b> <span class="muted">${esc(hero.name)}, ур. ${hero.level}</span>
           ${heroDef ? `<div class="muted">${esc(heroDef.armyBonus)}</div>` : ""}</div></div>
@@ -88,7 +88,7 @@
     $("army-slots").innerHTML = slots.map((s) => {
       if (!s) return `<div class="slot empty"></div>`;
       const u = unitOf(s.unitId);
-      return `<button type="button" class="slot" data-jump="${u.id}" title="${esc(u.name)}">${hbModel(u.model, faction)}<span class="slot-count">${s.count}</span><span class="slot-tier">${ROMAN[u.tier]}</span></button>`;
+      return `<button type="button" class="slot" data-jump="${u.id}" title="${esc(u.name)}">${hbFigure(u, faction)}<span class="slot-count">${s.count}</span><span class="slot-tier">${ROMAN[u.tier]}</span></button>`;
     }).join("");
 
     $("roster-title").textContent = `Войска фракции «${faction.name}»`;
@@ -98,7 +98,7 @@
         ${t.units.map((u) => {
           const n = countOf(u.id);
           return `<article class="unit-card ${n ? "in-army" : ""}" id="unit-${u.id}">
-            <div class="token big">${hbModel(u.model, faction)}</div>
+            <div class="token big">${hbFigure(u, faction)}</div>
             <div class="unit-body">
               <div class="row"><b>${esc(u.name)}</b><span class="unit-cost" title="Лидерство за одно существо">👑 ${u.cost}</span></div>
               <div class="muted">${ROLE[u.role] ?? u.role} · ${esc(u.description)}</div>

@@ -202,3 +202,27 @@
       <ellipse cx="50" cy="86" rx="28" ry="4.5" fill="#000" opacity=".45"/>${draw()}</svg>`;
   };
 })();
+
+// Painted figures: public/img/figures/<id>.png (square portrait, see docs/art-prompts.md).
+// Until a file exists, the SVG placeholder above is drawn instead.
+(() => {
+  const registry = new Map();
+  const missing = new Set();
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+  /** @param entity a faction hero or unit ({ id, name, model }), @param faction its faction */
+  window.hbFigure = (entity, faction) => {
+    if (missing.has(entity.id)) return window.hbModel(entity.model, faction);
+    registry.set(entity.id, { spec: entity.model, faction });
+    return `<img class="model figure" src="/img/figures/${encodeURIComponent(entity.id)}.png" alt="${esc(entity.name ?? "")}" data-figure="${esc(entity.id)}">`;
+  };
+
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    const id = img instanceof HTMLImageElement ? img.dataset.figure : undefined;
+    const entry = id && registry.get(id);
+    if (!entry) return;
+    missing.add(id);
+    img.outerHTML = window.hbModel(entry.spec, entry.faction);
+  }, true);
+})();
