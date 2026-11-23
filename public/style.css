@@ -575,3 +575,194 @@ h1 small { font-size: 15px; font-weight: normal; }
 @media (max-width: 480px) { .unit-card { flex-direction: column; align-items: center; } .unit-card .row { flex-wrap: wrap; } }
 img.figure { width: 100%; height: 100%; object-fit: cover; display: block; }
 .portrait img.figure { width: 100%; height: 100%; filter: none; }
+
+/* =====================================================================
+   Parchment theme (by the 23.11 mockups): light parchment panels with gold-brown frames,
+   a dark-blue ornate top bar. The battle screen keeps the dark look (tokens below).
+   ===================================================================== */
+:root {
+  --bg: #cdb98d;
+  --panel: #f6edd6;
+  --panel-2: #ecdfbf;
+  --inset: #fbf6e8;
+  --line: #cdb68a;
+  --gold: #8a6524;
+  --gold-hi: #4a2f0e;
+  --gold-dark: #a9864a;
+  --text: #2d2214;
+  --muted: #6f5d3f;
+  --danger: #b3261e;
+  --green: #2f7d3e;
+  --ink-light: #f7e6b5;
+  --navy: linear-gradient(180deg, #2a4d86, #183466 55%, #0f2348);
+  --frame: inset 0 0 0 1px #fffaf0, 0 0 0 1px #7a5c2e, 0 3px 10px rgba(60, 40, 10, .35);
+}
+body.battle-page {
+  --bg: #0c0a08; --panel: #1a1510; --panel-2: #120f0b; --inset: #0e0b08; --line: #3a2d1b;
+  --gold: #c9a45c; --gold-hi: #f0d595; --gold-dark: #7a5c2e; --text: #ece1c8; --muted: #a6977a;
+  --danger: #ff7a6b; --green: #4fb06a;
+  --frame: inset 0 0 0 1px #000, inset 0 0 0 2px rgba(201, 164, 92, .12), 0 8px 24px rgba(0, 0, 0, .55);
+}
+body:not(.battle-page) {
+  background:
+    radial-gradient(1200px 700px at 50% 0%, rgba(255, 245, 215, .55), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(120, 90, 40, .035) 0 2px, transparent 2px 6px),
+    linear-gradient(180deg, #d8c59b, #c4ad7e);
+}
+body.login-page {
+  background:
+    radial-gradient(700px 420px at 50% 18%, rgba(255, 245, 215, .7), transparent 65%),
+    linear-gradient(180deg, #d8c59b, #bea676);
+}
+body:not(.battle-page) .panel,
+body:not(.battle-page) .card {
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 2px solid var(--gold-dark); border-radius: 6px;
+}
+body:not(.battle-page) .panel::before, body:not(.battle-page) .panel::after { border-color: #7a5c2e; }
+body:not(.battle-page) .panel-title {
+  font-size: 24px; color: var(--gold-hi); text-shadow: 0 1px 0 #fffaf0;
+  background: linear-gradient(180deg, #fbf3dc, #e9d9b2); border-bottom: 2px solid var(--gold-dark);
+}
+body:not(.battle-page) .panel-title::before, body:not(.battle-page) .panel-title::after { content: " ❦ "; color: var(--gold); font-size: 16px; }
+
+/* buttons on parchment */
+body:not(.battle-page) button, body:not(.battle-page) .btn-secondary, body:not(.battle-page) a.button-link {
+  color: var(--gold-hi); background: linear-gradient(180deg, #fff8e6, #e6d3a6); border-color: var(--gold-dark);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(60, 40, 10, .35);
+}
+body:not(.battle-page) button:hover:not(:disabled) { border-color: var(--gold); color: #000; }
+body:not(.battle-page) .btn-primary, body:not(.battle-page) .btn-fight, body:not(.battle-page) form button[type=submit],
+body:not(.battle-page) .challenge button:not(.link) {
+  color: #fff4d6; background: linear-gradient(180deg, #c0392b, #8e2219 55%, #5c140e); border-color: #5a3c12; text-shadow: 0 1px 1px #000;
+}
+body:not(.battle-page) button.link, body:not(.battle-page) .link { background: none; box-shadow: none; color: var(--gold); text-decoration: underline; }
+body:not(.battle-page) .tabs button, body:not(.battle-page) .tabs a.tab { color: var(--muted); background: linear-gradient(180deg, #fbf3dc, #e7d6ae); border-color: var(--line); }
+body:not(.battle-page) .tabs button.active, body:not(.battle-page) .tabs a.tab.active { color: #fff4d6; background: linear-gradient(180deg, #c0392b, #8e2219 55%, #5c140e); border-color: #5a3c12; }
+body:not(.battle-page) input, body:not(.battle-page) select { background: #fffdf5; border-color: var(--line); box-shadow: inset 0 1px 2px rgba(60, 40, 10, .2); }
+body:not(.battle-page) a { color: #7a2a14; }
+body:not(.battle-page) .bar, body:not(.battle-page) .xp { background: #3a2c1c; }
+
+/* ---------- Ornate dark-blue top bar ---------- */
+.topbar {
+  background: var(--navy); border-bottom: 3px solid #c9a45c; padding: 6px 16px;
+  box-shadow: inset 0 -2px 0 #7a5c2e, 0 4px 14px rgba(40, 25, 5, .45);
+}
+.brand-name { color: #f7e6b5; text-shadow: 0 2px 2px #000; }
+.brand-name small { color: #e0c27a; }
+.topnav a {
+  color: #f2e2b8; background: linear-gradient(180deg, #3a5c96, #1c3a6c); border: 1px solid #c9a45c; border-radius: 4px 4px 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18); text-shadow: 0 1px 1px #000;
+}
+.topnav a:hover { color: #fff; border-color: #f0d595; }
+.topnav a.active { color: #fff4d6; background: linear-gradient(180deg, #c0392b, #8e2219 55%, #5c140e); border-color: #f0d595; }
+.topbar .online-badge { background: rgba(0, 0, 0, .3); border-color: #c9a45c; color: #e0d0a8; }
+.topbar .online-badge b { color: #fff; }
+.topbar .icon-btn { color: #f7e6b5; background: linear-gradient(180deg, #3a5c96, #1c3a6c); border-color: #c9a45c; }
+
+/* ---------- Home (hero page) ---------- */
+.page.home { max-width: 1280px; }
+.home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; align-items: start; }
+@media (max-width: 980px) { .home-grid { grid-template-columns: 1fr; } }
+.home-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.home-side { display: flex; flex-direction: column; gap: 16px; }
+
+.char-top { display: grid; grid-template-columns: 170px minmax(180px, 1.1fr) minmax(170px, 1fr) minmax(200px, 1.1fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .char-top { grid-template-columns: 170px minmax(0, 1fr) minmax(0, 1fr); } .char-relic { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .char-top { grid-template-columns: 1fr; } .char-portrait { max-width: 220px; margin: 0 auto; } }
+.char-portrait .portrait { height: auto; aspect-ratio: 1; border: 3px solid #7a5c2e; box-shadow: inset 0 0 0 2px #e0c27a, 0 2px 6px rgba(60, 40, 10, .4); border-radius: 4px; }
+.char-name { font-size: 26px; margin: 0 0 6px; color: var(--gold-hi); }
+.char-name::first-letter { color: #d9a21a; }
+.info-row { font-size: 14px; margin: 3px 0; }
+.info-row b { color: var(--gold-hi); }
+.info-sep { border-top: 1px solid var(--line); margin: 8px 0; }
+.char-info .xp { margin: 2px 0 6px; }
+.char-stats { border-left: 1px solid var(--line); padding-left: 14px; }
+.stat-list.compact .stat-row { padding: 3px 2px; border-bottom: 1px dashed var(--line); }
+.stat-list.compact .stat-icon { width: 24px; height: 24px; font-size: 13px; background: radial-gradient(circle at 40% 35%, #fff6dc, #e2cc96); }
+.stat-list.compact .stat-name { font-size: 14px; }
+.stat-list.compact .stat-row b { font-size: 18px; }
+.char-relic { border-left: 1px solid var(--line); padding-left: 14px; display: flex; flex-direction: column; gap: 6px; }
+.relic-title { font-family: var(--font-head); font-weight: 700; font-size: 17px; text-align: center; }
+.relic-name { font-family: var(--font-head); font-weight: 700; font-size: 21px; color: #7a2a14; text-align: center; text-decoration: underline; }
+.relic-stages { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.relic-stage { display: flex; flex-direction: column; align-items: center; opacity: .45; filter: grayscale(.7); }
+.relic-stage.on { opacity: 1; filter: none; }
+.relic-stage .token { width: 52px; height: 52px; }
+.relic-stage span { color: #d9a21a; font-size: 12px; letter-spacing: -1px; text-shadow: 0 1px 0 #7a5c2e; }
+.relic-stages .arrow { color: var(--gold); font-weight: 700; }
+.note {
+  font-size: 12.5px; font-style: italic; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px;
+  background: linear-gradient(180deg, #fffaea, #f3e6c4); box-shadow: inset 0 0 8px rgba(160, 130, 70, .2);
+}
+.char-bottom { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; margin-top: 14px; }
+@media (max-width: 760px) { .char-bottom { grid-template-columns: 1fr; } }
+.char-bottom .vitals, .char-bottom .derived { margin-top: 0; }
+.char-army { display: grid; grid-template-columns: 90px minmax(0, 1fr) 150px; gap: 12px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) { .char-army { grid-template-columns: 1fr; } }
+.army-label { font-family: var(--font-head); font-size: 17px; }
+.army-label b { font-size: 20px; color: var(--gold-hi); }
+.char-army .army-links { flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
+.char-army .army-links a, .char-army .army-links .link { font-family: var(--font-head); font-weight: 700; font-size: 16px; padding: 0; }
+.char-army .slot, .char-army .slot.empty { border: 2px solid #7a5c2e; box-shadow: inset 0 0 0 1px #e0c27a; }
+.char-army .slot.empty { background: #fbf6e8; border-style: solid; }
+
+.side-panel .btn-fight { font-size: 20px; }
+.services { display: flex; flex-direction: column; gap: 2px; }
+.services a { display: flex; gap: 10px; align-items: center; padding: 5px 4px; font-size: 15px; text-decoration: underline; border-bottom: 1px dashed var(--line); }
+.services a span { width: 24px; text-align: center; text-decoration: none; }
+.news { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.news li::before { content: "• "; color: var(--gold); }
+
+/* heroes by faction */
+.faction-columns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1000px) { .faction-columns { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .faction-columns { grid-template-columns: 1fr; } }
+.faction-banner {
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 8px; margin-bottom: 8px;
+  font-family: var(--font-head); font-weight: 700; font-size: 19px; color: #fff4d6; text-shadow: 0 1px 2px #000;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fc) 75%, #fff 25%), var(--fc) 50%, color-mix(in srgb, var(--fc) 70%, #000));
+  border: 2px solid #c9a45c; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .4);
+}
+.faction-banner .banner { width: 20px; height: 26px; }
+.hero-row { display: flex; gap: 10px; align-items: center; padding: 4px; border-radius: 4px; }
+.hero-row.current { background: rgba(217, 162, 26, .18); outline: 1px solid var(--gold); }
+.hero-row .token { width: 52px; height: 52px; border: 2px solid #7a5c2e; }
+.hero-row b { font-family: var(--font-head); font-size: 18px; }
+.relic-link { color: #7a2a14; text-decoration: underline; }
+
+/* armies by faction */
+.armies-table { display: flex; flex-direction: column; gap: 8px; overflow-x: auto; }
+.army-row { display: grid; grid-template-columns: 150px repeat(7, minmax(96px, 1fr)); gap: 6px; align-items: center; min-width: 860px; }
+.army-row .faction-banner { margin: 0; font-size: 17px; }
+.tier-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.tier-pics { display: flex; gap: 2px; }
+.tier-pics .token { width: 40px; height: 40px; border: 1px solid #7a5c2e; }
+.tier-names { font-size: 11.5px; line-height: 1.2; }
+
+/* other parchment details */
+body:not(.battle-page) .stat, body:not(.battle-page) .record { background: var(--inset); }
+body:not(.battle-page) .chat { background: linear-gradient(180deg, #f6edd6, #ecdfbf); border: 2px solid var(--gold-dark); }
+body:not(.battle-page) .chat-head { background: var(--navy); }
+body:not(.battle-page) .chat-head b { color: #f7e6b5; }
+body:not(.battle-page) .chat-head .muted { color: #c8d4ea; }
+body:not(.battle-page) .chat-log time { color: #8a7a5a; }
+body:not(.battle-page) .chat-log a { color: #7a2a14; }
+body:not(.battle-page) .online-badge:not(.in-bar) { background: var(--panel); color: var(--muted); }
+body:not(.battle-page) .modal-box { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 2px solid var(--gold-dark); }
+body:not(.battle-page) .modal-box .panel-title { background: linear-gradient(180deg, #fbf3dc, #e9d9b2); }
+body:not(.battle-page) .nameplate h1 { color: #fff4d6; }
+body:not(.battle-page) .mode, body:not(.battle-page) .challenge, body:not(.battle-page) .unit-card, body:not(.battle-page) .hero-choice { background: var(--inset); }
+body:not(.battle-page) .tier-label { background: linear-gradient(180deg, #fbf3dc, #e7d6ae); }
+body:not(.battle-page) .wiki-nav a.active, body:not(.battle-page) .wiki-nav a:hover { background: var(--inset); }
+body:not(.battle-page) .wiki th { background: #ecdfbf; }
+body:not(.battle-page) .faction-tab { color: #fff4d6; background: linear-gradient(180deg, color-mix(in srgb, var(--fc) 80%, #fff 20%), var(--fc) 55%, color-mix(in srgb, var(--fc) 70%, #000)); }
+body:not(.battle-page) .faction-tab b { color: #fff4d6; text-shadow: 0 1px 2px #000; }
+body:not(.battle-page) .faction-tab small { color: #f2e2b8; }
+body:not(.battle-page) .icon { background: radial-gradient(circle at 50% 35%, #fff6dc, #e2cc96 80%); border-color: var(--gold-dark); box-shadow: inset 0 0 6px rgba(120, 90, 40, .35); }
+body:not(.battle-page) .economy span { background: var(--inset); }
+body:not(.battle-page) .relic-art { box-shadow: inset 0 0 30px rgba(60, 30, 5, .7); }
+body .topnav a { color: #f2e2b8; text-decoration: none; }
+body .topnav a.active, body .topnav a:hover { color: #fff4d6; }
+body a.faction-name { color: #fff4d6; text-decoration: none; }
+body .brand { text-decoration: none; }

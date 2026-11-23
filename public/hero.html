@@ -12,62 +12,89 @@
 </head>
 <body>
 <header class="topbar" id="topbar" data-page="hero"></header>
-<main class="page">
-  <div class="hero-layout">
-    <section class="panel portrait-panel">
-      <div class="portrait" id="portrait"><span class="portrait-icon" id="portrait-icon">⚔️</span></div>
-      <div class="faction-line" id="faction-line"></div>
-      <div class="nameplate">
-        <h1 id="hero-name">…</h1>
-        <div class="class-title" id="class-title"></div>
-        <div class="level-plaque" id="level"></div>
-        <div class="class-line" id="class-line"></div>
-      </div>
-      <div class="xp-block">
-        <div class="row"><span class="muted">Опыт героя</span><span class="muted" id="xp-text"></span></div>
-        <div class="xp"><div id="xp-bar" style="width:0"></div></div>
-      </div>
-    </section>
+<main class="page home">
+  <div class="home-grid">
+    <div class="home-main">
+      <section class="panel char-panel">
+        <h2 class="panel-title">Ваш персонаж</h2>
+        <div class="char-top">
+          <div class="char-portrait">
+            <div class="portrait" id="portrait"><span class="portrait-icon" id="portrait-icon">⚔️</span></div>
+          </div>
+          <div class="char-info">
+            <h1 class="char-name">★ <span id="hero-name">…</span></h1>
+            <div class="info-row">Фракция: <span id="faction-line"></span></div>
+            <div class="info-row">Герой: <b id="class-title"></b></div>
+            <div class="info-row"><b id="level"></b> <span class="muted" id="xp-text"></span></div>
+            <div class="xp"><div id="xp-bar" style="width:0"></div></div>
+            <div class="info-row muted" id="class-line"></div>
+            <div class="info-sep"></div>
+            <div class="info-row">⚔ PvP: <b id="pvp"></b> <span class="muted">победы / поражения</span></div>
+            <div class="info-row">🛡 Боты: <b id="bot"></b> <span class="muted">победы / поражения</span></div>
+          </div>
+          <div class="char-stats">
+            <div class="stat-list compact" id="stats"></div>
+          </div>
+          <div class="char-relic" id="relic-box"></div>
+        </div>
+        <div class="char-bottom">
+          <div class="vitals" id="vitals"></div>
+          <div class="derived" id="derived"></div>
+        </div>
+        <div class="char-army hidden" id="army-panel">
+          <div class="army-label">⚑ Армия:<br><b id="army-total"></b></div>
+          <div class="army-strip" id="army-strip"></div>
+          <div class="army-links">
+            <a href="/army">Набор армии »</a>
+            <button type="button" class="link" id="change-hero">Сменить героя »</button>
+          </div>
+        </div>
+      </section>
 
-    <section class="panel">
-      <h2 class="panel-title">Характеристики</h2>
-      <div class="stat-list" id="stats"></div>
-      <div class="vitals" id="vitals"></div>
-      <div class="derived" id="derived"></div>
-    </section>
+      <section class="panel build-panel">
+        <div class="tabs" id="tabs">
+          <button type="button" data-tab="classes" class="active">Направления</button>
+          <button type="button" data-tab="skills">Умения</button>
+          <button type="button" data-tab="talents">Таланты</button>
+          <button type="button" data-tab="relic">Реликвия</button>
+        </div>
+        <div id="tab-body"></div>
+        <div class="error" id="build-error"></div>
+      </section>
 
-    <section class="panel battle-panel">
-      <h2 class="panel-title">Сражения</h2>
-      <button type="button" id="fight" class="btn-fight">⚔ В бой с ботом</button>
-      <a class="btn-secondary full" href="/pvp">Арена: PvP-заявки 1×1</a>
-      <div class="error" id="fight-error"></div>
-      <div class="records">
-        <div class="record"><span>PvP</span><b id="pvp"></b><small>победы / поражения</small></div>
-        <div class="record"><span>Против ботов</span><b id="bot"></b><small>победы / поражения</small></div>
-      </div>
-    </section>
+      <section class="panel">
+        <h2 class="panel-title">Герои по фракциям</h2>
+        <div class="faction-columns" id="factions-overview"></div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title">Армии фракций</h2>
+        <div class="armies-table" id="armies-overview"></div>
+      </section>
+    </div>
+
+    <aside class="home-side">
+      <section class="panel side-panel">
+        <h2 class="panel-title">Сражения</h2>
+        <button type="button" id="fight" class="btn-fight">⚔ В бой с ботом</button>
+        <div class="error" id="fight-error"></div>
+      </section>
+      <section class="panel side-panel">
+        <h2 class="panel-title">Сервисы</h2>
+        <nav class="services">
+          <a href="/army"><span>⚑</span>Набор армии</a>
+          <a href="/pvp"><span>⚔</span>Арена (PvP)</a>
+          <a href="/wiki"><span>📜</span>Об игре</a>
+          <a href="/wiki/changelog"><span>📰</span>Изменения</a>
+          <a href="/wiki/factions"><span>🏰</span>Фракции и армия</a>
+        </nav>
+      </section>
+      <section class="panel side-panel">
+        <h2 class="panel-title">Новости</h2>
+        <ul class="news" id="news"><li class="muted">Загрузка…</li></ul>
+      </section>
+    </aside>
   </div>
-
-  <section class="panel army-panel" id="army-panel">
-    <h2 class="panel-title">Армия</h2>
-    <div class="army-strip" id="army-strip"></div>
-    <div class="army-links">
-      <span class="muted" id="army-total"></span>
-      <a href="/army" class="btn-secondary">Набор армии</a>
-      <button type="button" class="link" id="change-hero">Сменить героя фракции</button>
-    </div>
-  </section>
-
-  <section class="panel build-panel">
-    <div class="tabs" id="tabs">
-      <button type="button" data-tab="classes" class="active">Направления</button>
-      <button type="button" data-tab="skills">Умения</button>
-      <button type="button" data-tab="talents">Таланты</button>
-      <button type="button" data-tab="relic">Реликвия</button>
-    </div>
-    <div id="tab-body"></div>
-    <div class="error" id="build-error"></div>
-  </section>
 </main>
 
 <div class="modal hidden" id="faction-modal">

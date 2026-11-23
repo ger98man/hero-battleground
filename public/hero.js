@@ -80,8 +80,8 @@ function render() {
   $("hero-name").textContent = h.name;
   $("class-title").textContent = h.needsClass ? "Герой не выбран" : h.className;
   renderFaction();
-  $("level").textContent = `Ур. ${h.level}`;
-  $("xp-text").textContent = `${h.experience} / ${h.experienceToNext}`;
+  $("level").textContent = `Уровень ${h.level}`;
+  $("xp-text").textContent = `(${h.experience} / ${h.experienceToNext} опыта)`;
   $("xp-bar").style.width = `${Math.min(100, (h.experience / h.experienceToNext) * 100)}%`;
   $("class-line").textContent = h.build.classes.map((c) => `${classDef(c.id).name} ${ROMAN[c.rank]}`).join(" + ");
   const p = h.profile;
@@ -211,6 +211,8 @@ $("fight").onclick = async () => {
 (async () => {
   [catalog, { hero }, { factions }] = await Promise.all([api("/api/classes"), api("/api/hero"), api("/api/factions")]);
   render();
+  renderOverviews();
+  renderNews();
   if (!hero.factionHero) openFactionModal();
   checkOwnChallenge();
 })();
@@ -240,8 +242,10 @@ function renderFaction() {
     : `<span class="portrait-icon">${hero.build.classes[0] ? classDef(hero.build.classes[0].id).icon : "⚔️"}</span>`;
   $("portrait").style.setProperty("--fc", f?.color ?? "transparent");
   $("faction-line").innerHTML = f
-    ? `<span class="faction-name" style="--fc:${f.color}">${esc(f.name)}</span> · ${esc(fh?.name ?? "")}`
-    : "";
+    ? `<a class="faction-name" style="--fc:${f.color}" href="/wiki/factions">${esc(f.name)}</a>`
+    : `<button type="button" class="link" id="pick-faction">не выбрана — выбрать</button>`;
+  if (!f) $("pick-faction").onclick = openFactionModal;
+  renderRelicBox(f, fh);
   $("army-panel").classList.toggle("hidden", !f);
   if (!f) return;
   document.documentElement.style.setProperty("--faction", f.color);
@@ -254,7 +258,55 @@ function renderFaction() {
       : `<a class="slot empty" href="/army" title="Пустой слот"></a>`;
   }).join("");
   const total = hero.army.reduce((sum, st) => sum + st.count, 0);
-  $("army-total").textContent = `${total} существ · лидерство ${hero.armyLimits.used} / ${hero.armyLimits.leadership}`;
+  $("army-total").textContent = `${total} сущ.`;
+  $("army-total").title = `Лидерство ${hero.armyLimits.used} / ${hero.armyLimits.leadership}`;
+}
+
+// The faction hero's legendary relic and its three stages (stage = hero.relic.tier).
+function renderRelicBox(f, fh) {
+  if (!fh || !hero.relic) {
+    $("relic-box").innerHTML = `<div class="note">При создании персонажа вы выбираете фракцию и одного из её четырёх героев.
+      У каждого героя своя легендарная реликвия, она усиливается по мере развития.</div>`;
+    return;
+  }
+  const stages = [1, 2, 3].map((n) => `<div class="relic-stage ${n <= hero.relic.tier ? "on" : ""}">
+      <div class="token">${hbFigure(fh, f)}</div><span>${"★".repeat(n)}</span></div>`).join('<span class="arrow">→</span>');
+  $("relic-box").innerHTML = `<div class="relic-title">Легендарная реликвия:</div>
+    <div class="relic-name">${esc(fh.relic.name)}</div>
+    <div class="relic-stages">${stages}</div>
+    <div class="note">${esc(fh.relic.description)} Реликвия всегда с героем и не теряется.</div>`;
+}
+
+// Static overviews from the faction catalog: heroes by faction, armies by faction.
+function renderOverviews() {
+  $("factions-overview").innerHTML = factions.map((f) => `
+    <div class="faction-col" style="--fc:${f.color}">
+      <div class="faction-banner"><span class="banner"></span>${esc(f.name)}</div>
+      ${f.heroes.map((h) => `<div class="hero-row ${h.id === hero.factionHero ? "current" : ""}">
+        <div class="token">${hbFigure(h, f)}</div>
+        <div><b>${esc(h.name)}</b><div class="muted">Реликвия: <span class="relic-link" title="${esc(h.relic.description)}">${esc(h.relic.name)}</span></div></div>
+      </div>`).join("")}
+    </div>`).join("");
+  $("armies-overview").innerHTML = factions.map((f) => `
+    <div class="army-row" style="--fc:${f.color}">
+      <div class="faction-banner"><span class="banner"></span>${esc(f.name)}</div>
+      ${f.tiers.map((t) => `<div class="tier-cell" title="${t.units.map((u) => esc(u.name)).join(" / ")}">
+        <div class="tier-pics">${t.units.map((u) => `<div class="token">${hbFigure(u, f)}</div>`).join("")}</div>
+        <div class="tier-names">${t.tier}. ${t.units.map((u) => esc(u.name)).join(", ")}</div>
+      </div>`).join("")}
+    </div>`).join("");
+}
+
+// Latest changelog entries as news.
+async function renderNews() {
+  try {
+    const page = await api("/api/wiki/changelog");
+    const doc = new DOMParser().parseFromString(page.html, "text/html");
+    const items = [...doc.querySelectorAll("h2")].slice(0, 5).map((h) => `<li><a href="/wiki/changelog">${esc(h.textContent)}</a></li>`);
+    $("news").innerHTML = items.join("") || `<li class="muted">Пока пусто</li>`;
+  } catch {
+    $("news").innerHTML = `<li class="muted">Не удалось загрузить</li>`;
+  }
 }
 
 function openFactionModal() {
@@ -310,6 +362,7 @@ $("faction-body").onclick = async (e) => {
     hero = { ...hero, ...data.hero };
     $("faction-modal").classList.add("hidden");
     render();
+    renderOverviews();
   } catch (err) {
     $("faction-error").textContent = err.message;
   }
