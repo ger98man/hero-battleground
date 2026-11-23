@@ -34,3 +34,8 @@
 .chat .error { min-height: 0; margin: 4px 0 0; font-size: 12px; }
 /* keep page content clear of the chat on small screens */
 @media (max-width: 760px) { body.has-chat { padding-bottom: 60px; } }
+
+/* Docked chat: lives in the page layout (#chat-slot) instead of floating over it. */
+.chat.docked { position: static; width: auto; max-width: none; left: auto; bottom: auto; }
+.chat-slot:empty { display: none; }
+.home-side .chat.docked .chat-body { height: 340px; }

@@ -766,3 +766,6 @@ body .topnav a { color: #f2e2b8; text-decoration: none; }
 body .topnav a.active, body .topnav a:hover { color: #fff4d6; }
 body a.faction-name { color: #fff4d6; text-decoration: none; }
 body .brand { text-decoration: none; }
+.wiki .overview { margin: 18px 0 24px; }
+.wiki .overview .faction-banner { font-size: 17px; }
+.wiki .overview .hero-row b { font-size: 17px; }
