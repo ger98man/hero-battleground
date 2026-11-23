@@ -26,8 +26,18 @@
     const page = await res.json();
     // Markdown comes from the game's own repository, not from players.
     content.innerHTML = page.html;
+    if (slug === "factions") await addFactionOverview(content);
     document.title = `Hero Battleground — ${page.title}`;
   } catch {
     content.innerHTML = '<p class="error">Не удалось загрузить страницу.</p>';
   }
 })();
+
+// /wiki/factions: heroes and armies of every faction with portraits, after the intro paragraph.
+async function addFactionOverview(content) {
+  try {
+    const { factions } = await fetch("/api/factions").then((r) => r.json());
+    const anchor = content.querySelector("h2") ?? content.lastElementChild;
+    anchor.insertAdjacentHTML("beforebegin", hbFactionOverview(factions));
+  } catch {}
+}

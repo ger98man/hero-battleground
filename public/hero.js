@@ -211,7 +211,6 @@ $("fight").onclick = async () => {
 (async () => {
   [catalog, { hero }, { factions }] = await Promise.all([api("/api/classes"), api("/api/hero"), api("/api/factions")]);
   render();
-  renderOverviews();
   renderNews();
   if (!hero.factionHero) openFactionModal();
   checkOwnChallenge();
@@ -275,26 +274,6 @@ function renderRelicBox(f, fh) {
     <div class="relic-name">${esc(fh.relic.name)}</div>
     <div class="relic-stages">${stages}</div>
     <div class="note">${esc(fh.relic.description)} Реликвия всегда с героем и не теряется.</div>`;
-}
-
-// Static overviews from the faction catalog: heroes by faction, armies by faction.
-function renderOverviews() {
-  $("factions-overview").innerHTML = factions.map((f) => `
-    <div class="faction-col" style="--fc:${f.color}">
-      <div class="faction-banner"><span class="banner"></span>${esc(f.name)}</div>
-      ${f.heroes.map((h) => `<div class="hero-row ${h.id === hero.factionHero ? "current" : ""}">
-        <div class="token">${hbFigure(h, f)}</div>
-        <div><b>${esc(h.name)}</b><div class="muted">Реликвия: <span class="relic-link" title="${esc(h.relic.description)}">${esc(h.relic.name)}</span></div></div>
-      </div>`).join("")}
-    </div>`).join("");
-  $("armies-overview").innerHTML = factions.map((f) => `
-    <div class="army-row" style="--fc:${f.color}">
-      <div class="faction-banner"><span class="banner"></span>${esc(f.name)}</div>
-      ${f.tiers.map((t) => `<div class="tier-cell" title="${t.units.map((u) => esc(u.name)).join(" / ")}">
-        <div class="tier-pics">${t.units.map((u) => `<div class="token">${hbFigure(u, f)}</div>`).join("")}</div>
-        <div class="tier-names">${t.tier}. ${t.units.map((u) => esc(u.name)).join(", ")}</div>
-      </div>`).join("")}
-    </div>`).join("");
 }
 
 // Latest changelog entries as news.
@@ -362,7 +341,6 @@ $("faction-body").onclick = async (e) => {
     hero = { ...hero, ...data.hero };
     $("faction-modal").classList.add("hidden");
     render();
-    renderOverviews();
   } catch (err) {
     $("faction-error").textContent = err.message;
   }
