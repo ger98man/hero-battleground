@@ -18,16 +18,22 @@ heroRouter.get("/", async (req, res) => {
   res.json({ hero: { ...heroView(hero), username: rows[0]?.username } });
 });
 
-/** Save the whole build (classes, specs, talents, skill loadout). Free to change outside battle. */
+/**
+ * Save talents and the skill loadout. Free to change outside battle.
+ * Classes are not chosen here: they come from the faction hero and the level.
+ */
 heroRouter.post("/build", async (req, res) => {
-  const build = parseBuild(req.body?.build);
+  const requested = parseBuild(req.body?.build);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const hero = await getHeroByUser(req.session.userId!, client, true);
     if (!hero) throw new Error("hero not found");
+    const build = { ...requested, classes: hero.build.classes };
     const { rowCount } = await client.query("SELECT 1 FROM battles WHERE hero_id = $1 AND status = 'active'", [hero.id]);
-    const error = rowCount ? "Во время боя менять билд нельзя" : validateBuild(build, hero.level);
+    const error = rowCount
+      ? "Во время боя менять билд нельзя"
+      : hero.faction_hero ? validateBuild(build, hero.level) : "Сначала выберите фракцию и героя";
     if (error) {
       await client.query("ROLLBACK");
       res.status(400).json({ error });

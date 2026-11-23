@@ -78,7 +78,7 @@ function vitalBar(name, cls, value) {
 function render() {
   const h = hero;
   $("hero-name").textContent = h.name;
-  $("class-title").textContent = h.needsClass ? "Класс не выбран" : h.className;
+  $("class-title").textContent = h.needsClass ? "Герой не выбран" : h.className;
   renderFaction();
   $("level").textContent = `Ур. ${h.level}`;
   $("xp-text").textContent = `${h.experience} / ${h.experienceToNext}`;
@@ -107,33 +107,25 @@ function render() {
   $("tab-body").innerHTML = { classes: classesTab, skills: skillsTab, talents: talentsTab, relic: relicTab }[tab]();
 }
 
+// Read-only: the class lines come from the faction hero and grow with the level.
 function classesTab() {
-  const { limits, build } = hero;
-  const free = limits.classPoints - limits.classPointsUsed;
-  const rows = build.classes.map((c, i) => {
-    const def = classDef(c.id);
-    const specOptions = def.specs.map((s) => `<option value="${s.id}" ${s.id === c.spec ? "selected" : ""}>${esc(s.name)}</option>`).join("");
-    const spec = def.specs.find((s) => s.id === c.spec);
-    return `<div class="class-row">
+  const f = factions.find((x) => x.id === hero.faction);
+  const fh = f?.heroes.find((x) => x.id === hero.factionHero);
+  if (!fh) return `<p class="muted">Выберите фракцию и героя, чтобы увидеть его боевые направления.</p>`;
+  const now = new Map(hero.build.classes.map((c) => [c.id, c.rank]));
+  const rows = fh.classes.map((line, i) => {
+    const def = classDef(line.id);
+    const spec = def.specs.find((s) => s.id === line.spec);
+    const rank = now.get(line.id);
+    return `<div class="class-row ${rank ? "" : "locked"}">
       <span class="icon big">${def.icon}</span>
-      <div class="grow"><b>${esc(def.name)} ${ROMAN[c.rank]}</b>
-        <div><select data-spec="${i}">${specOptions}</select></div>
-        <div class="muted">${esc(spec?.description ?? "")}</div></div>
-      <div class="rank-btns">
-        <button type="button" data-rank="${i}" data-delta="-1" ${c.rank <= 1 && build.classes.length === 1 ? "disabled" : ""}>−</button>
-        <button type="button" data-rank="${i}" data-delta="1" ${free <= 0 || c.rank >= catalog.rules.MAX_CLASS_RANK ? "disabled" : ""}>+</button>
-      </div></div>`;
+      <div class="grow"><b>${esc(def.name)} ${rank ? ROMAN[rank] : ""}</b> <span class="muted">${i === 0 ? "основное направление" : "второе направление"}</span>
+        <div>${esc(spec?.name ?? "")}: <span class="muted">${esc(spec?.description ?? "")}</span></div>
+        ${rank ? "" : `<div class="muted">🔒 Откроется на 6 уровне</div>`}</div></div>`;
   }).join("");
-  const canAdd = free > 0 && build.classes.length < limits.classSlots;
-  const addable = catalog.classes.filter((c) => !build.classes.some((b) => b.id === c.id));
-  const addHtml = addable.map((c) => `<button type="button" class="chip" data-add="${c.id}" ${!c.playable || !canAdd ? "disabled" : ""}
-      title="${esc(c.description)}">${c.icon} ${esc(c.name)}${c.playable ? "" : " (скоро)"}</button>`).join("");
-  const hybrids = hero.build.classes.length > 1 ? "" : `<p class="muted">На 6-м уровне откроется второй класс: Воин + Монах = Паладин, Воин + Маг = Боевой маг.</p>`;
-  return `<p class="muted">Очки классов: ${limits.classPointsUsed} / ${limits.classPoints} · классов: ${build.classes.length} / ${limits.classSlots}.
-      Очко даётся каждый 3-й уровень, новый класс — каждый 6-й (до ${catalog.rules.MAX_CLASSES}).</p>
-    ${rows}
-    <p><b>Добавить класс</b>${canAdd ? "" : ` <span class="muted">(нужно свободное очко и место под класс)</span>`}</p>
-    <div class="chips">${addHtml}</div>${hybrids}`;
+  return `<p class="muted">Боевые направления героя «${esc(fh.name)}» заданы фракцией. Ранг растёт сам: +1 каждый 3-й уровень,
+      второе направление (если есть) открывается на 6 уровне и получает треть рангов. От направлений зависят характеристики и умения.</p>
+    ${rows}`;
 }
 
 function skillsTab() {
@@ -191,29 +183,9 @@ $("tabs").onclick = (e) => {
   if (t) { tab = t; render(); }
 };
 
-$("tab-body").onclick = (e) => {
-  const d = e.target.dataset;
-  const build = cloneBuild();
-  if (d.rank !== undefined) {
-    const c = build.classes[Number(d.rank)];
-    c.rank += Number(d.delta);
-    if (c.rank < 1) build.classes.splice(Number(d.rank), 1);
-    return saveBuild(build);
-  }
-  if (d.add) {
-    const def = classDef(d.add);
-    build.classes.push({ id: def.id, rank: 1, spec: def.specs[0].id });
-    return saveBuild(build);
-  }
-};
-
 $("tab-body").onchange = (e) => {
   const d = e.target.dataset;
   const build = cloneBuild();
-  if (d.spec !== undefined) {
-    build.classes[Number(d.spec)].spec = e.target.value;
-    return saveBuild(build);
-  }
   if (d.skill) {
     const current = new Set(hero.profile.skills);
     if (e.target.checked) current.add(d.skill); else current.delete(d.skill);
@@ -228,35 +200,6 @@ $("tab-body").onchange = (e) => {
   }
 };
 
-function openClassModal() {
-  $("class-list").innerHTML = catalog.classes.map((c) => {
-    const specs = c.specs.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
-    return `<div class="artifact-card ${c.playable ? "" : "locked"}">
-      <div class="artifact-head"><span class="icon big">${c.icon}</span><div><b>${esc(c.name)}</b>
-        <div class="muted">${esc(c.description)}</div></div></div>
-      ${c.playable
-        ? `<label>Специализация</label><select id="spec-${c.id}">${specs}</select>
-           <details><summary>Умения</summary>${[c.basic, ...c.skills].map((s) => skillHtml(s)).join("")}</details>
-           <button type="button" data-pick="${c.id}">Выбрать</button>`
-        : `<p class="muted">Скоро</p>`}
-    </div>`;
-  }).join("");
-  $("class-modal").classList.remove("hidden");
-}
-
-$("class-list").onclick = async (e) => {
-  const id = e.target.dataset.pick;
-  if (!id) return;
-  try {
-    const data = await api("/api/hero/build", { build: { classes: [{ id, rank: 1, spec: $(`spec-${id}`).value }], talents: [], loadout: [] } });
-    hero = { ...hero, ...data.hero };
-    $("class-modal").classList.add("hidden");
-    render();
-  } catch (err) {
-    $("modal-error").textContent = err.message;
-  }
-};
-
 $("fight").onclick = async () => {
   $("fight").disabled = true;
   const res = await fetch("/api/battle", { method: "POST" });
@@ -268,8 +211,7 @@ $("fight").onclick = async () => {
 (async () => {
   [catalog, { hero }, { factions }] = await Promise.all([api("/api/classes"), api("/api/hero"), api("/api/factions")]);
   render();
-  if (!hero.faction) openFactionModal();
-  else if (hero.needsClass) openClassModal();
+  if (!hero.factionHero) openFactionModal();
   checkOwnChallenge();
 })();
 
@@ -368,7 +310,6 @@ $("faction-body").onclick = async (e) => {
     hero = { ...hero, ...data.hero };
     $("faction-modal").classList.add("hidden");
     render();
-    if (hero.needsClass) openClassModal();
   } catch (err) {
     $("faction-error").textContent = err.message;
   }

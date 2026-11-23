@@ -89,8 +89,13 @@ export type UnitDef = {
   model: ModelSpec;
 };
 
+/** A class line of a faction hero: the game class and its specialization (see classes.ts). */
+export type HeroClassLine = { id: string; spec: string };
+
 export type FactionHero = {
   id: string;
+  /** The hero's fixed class lines, main one first. The second one opens at level 6. */
+  classes: HeroClassLine[];
   name: string;
   title: string;
   description: string;
@@ -186,16 +191,16 @@ export const FACTIONS: readonly Faction[] = [
     color: "#2f5fb3",
     accent: "#e8c66a",
     heroes: [
-      { id: "dawn_paladin", name: "Паладин", title: "Щит ордена", description: "Ведёт рыцарей в первом ряду, лечит и защищает войска.",
+      { id: "dawn_paladin", classes: [{ id: "warrior", spec: "warrior_shield" }, { id: "monk", spec: "monk_light" }], name: "Паладин", title: "Щит ордена", description: "Ведёт рыцарей в первом ряду, лечит и защищает войска.",
         relic: { name: "Клинок Зари", description: "Удары героя накладывают Световую метку." }, armyBonus: "+2 к защите пехоты",
         model: { body: M.Knight, weapon: W.Sword, head: H.Helm, shield: true, cape: true, tint: "#c9ced8" } },
-      { id: "dawn_archmage", name: "Архимаг", title: "Хранитель башни", description: "Сильнейший заклинатель ордена, усиливает магов.",
+      { id: "dawn_archmage", classes: [{ id: "mage", spec: "mage_fire" }], name: "Архимаг", title: "Хранитель башни", description: "Сильнейший заклинатель ордена, усиливает магов.",
         relic: { name: "Посох Семи Звёзд", description: "Заклинания стоят меньше маны." }, armyBonus: "+20% урона заклинателей",
         model: { body: M.Robed, weapon: W.Staff, head: H.Hood, cape: true, tint: "#3b62b8" } },
-      { id: "dawn_marshal", name: "Маршал", title: "Командир стрелков", description: "Мастер строя и залпов, ведёт арбалетчиков.",
+      { id: "dawn_marshal", classes: [{ id: "warrior", spec: "warrior_dual" }], name: "Маршал", title: "Командир стрелков", description: "Мастер строя и залпов, ведёт арбалетчиков.",
         relic: { name: "Знамя Первого Полка", description: "Стрелки получают +1 к инициативе." }, armyBonus: "+1 к атаке стрелков",
         model: { body: M.Soldier, weapon: W.Crossbow, head: H.Feather, cape: true, tint: "#8a6a3c" } },
-      { id: "dawn_inquisitor", name: "Инквизитор", title: "Карающая длань", description: "Охотник на нечисть, ослабляет вражескую магию.",
+      { id: "dawn_inquisitor", classes: [{ id: "monk", spec: "monk_light" }, { id: "warrior", spec: "warrior_twohand" }], name: "Инквизитор", title: "Карающая длань", description: "Охотник на нечисть, ослабляет вражескую магию.",
         relic: { name: "Печать Очищения", description: "Снимает с войск вражеские проклятия." }, armyBonus: "+10% к сопротивлению магии",
         model: { body: M.Soldier, weapon: W.Hammer, head: H.Hood, cape: true, tint: "#7a2b25" } },
     ],
@@ -224,16 +229,16 @@ export const FACTIONS: readonly Faction[] = [
     color: "#9b2a1e",
     accent: "#e09a4a",
     heroes: [
-      { id: "ash_warlord", name: "Вождь", title: "Голос кланов", description: "Ведёт орду в атаку, усиливает ближний бой.",
+      { id: "ash_warlord", classes: [{ id: "warrior", spec: "warrior_twohand" }, { id: "monk", spec: "monk_arts" }], name: "Вождь", title: "Голос кланов", description: "Ведёт орду в атаку, усиливает ближний бой.",
         relic: { name: "Топор Первого Костра", description: "Каждый третий удар героя бьёт дважды." }, armyBonus: "+2 к атаке пехоты",
         model: { body: M.Giant, weapon: W.Axe, head: H.Horns, cape: true, tint: "#6f8a3a" } },
-      { id: "ash_shaman", name: "Шаман бури", title: "Говорящий с громом", description: "Призывает молнии и лечит воинов.",
+      { id: "ash_shaman", classes: [{ id: "mage", spec: "mage_lightning" }, { id: "monk", spec: "monk_healing" }], name: "Шаман бури", title: "Говорящий с громом", description: "Призывает молнии и лечит воинов.",
         relic: { name: "Тотем Грома", description: "Молния прыгает на соседнюю цель." }, armyBonus: "+15% урона шаманов",
         model: { body: M.Robed, weapon: W.Staff, head: H.Antlers, tint: "#7a5a3a" } },
-      { id: "ash_beastmaster", name: "Укротитель", title: "Брат зверей", description: "Ездит на волке, ведёт зверей и всадников.",
+      { id: "ash_beastmaster", classes: [{ id: "warrior", spec: "warrior_dual" }], name: "Укротитель", title: "Брат зверей", description: "Ездит на волке, ведёт зверей и всадников.",
         relic: { name: "Клык Старого Волка", description: "Звери получают +1 к скорости." }, armyBonus: "+1 к скорости зверей",
         model: { body: M.Rider, weapon: W.Spear, head: H.Feather, tint: "#6b6f74" } },
-      { id: "ash_berserker", name: "Берсерк", title: "Красная ярость", description: "Чем меньше здоровья, тем сильнее бьёт.",
+      { id: "ash_berserker", classes: [{ id: "warrior", spec: "warrior_twohand" }], name: "Берсерк", title: "Красная ярость", description: "Чем меньше здоровья, тем сильнее бьёт.",
         relic: { name: "Цепной молот", description: "Убийство отряда даёт дополнительный ход." }, armyBonus: "+10% урона при здоровье ниже половины",
         model: { body: M.Giant, weapon: W.Hammer, head: H.Bare, tint: "#a3593a" } },
     ],
@@ -262,16 +267,16 @@ export const FACTIONS: readonly Faction[] = [
     color: "#5b2f86",
     accent: "#7ee07a",
     heroes: [
-      { id: "rot_necromancer", name: "Некромант", title: "Собиратель душ", description: "Поднимает павших врагов в армию.",
+      { id: "rot_necromancer", classes: [{ id: "mage", spec: "mage_ice" }], name: "Некромант", title: "Собиратель душ", description: "Поднимает павших врагов в армию.",
         relic: { name: "Череп Шёпотов", description: "После боя часть павших встаёт скелетами." }, armyBonus: "+10% к поднятию нежити",
         model: { body: M.Robed, weapon: W.Staff, head: H.Hood, tint: "#2e2a3a" } },
-      { id: "rot_deathknight", name: "Рыцарь тлена", title: "Чёрный клинок", description: "Мёртвый рыцарь, ведёт конницу мертвецов.",
+      { id: "rot_deathknight", classes: [{ id: "warrior", spec: "warrior_twohand" }, { id: "mage", spec: "mage_ice" }], name: "Рыцарь тлена", title: "Чёрный клинок", description: "Мёртвый рыцарь, ведёт конницу мертвецов.",
         relic: { name: "Хладный меч", description: "Удар замедляет цель." }, armyBonus: "+2 к атаке всадников",
         model: { body: M.Knight, weapon: W.Sword, head: H.Horns, cape: true, tint: "#3c4250" } },
-      { id: "rot_lich", name: "Костяной лорд", title: "Неумирающий", description: "Древний маг, его проклятия ослабляют врага.",
+      { id: "rot_lich", classes: [{ id: "mage", spec: "mage_earth" }], name: "Костяной лорд", title: "Неумирающий", description: "Древний маг, его проклятия ослабляют врага.",
         relic: { name: "Филактерия", description: "Один раз за бой герой встаёт после смерти." }, armyBonus: "-1 к защите врагов",
         model: { body: M.Spirit, weapon: W.Staff, head: H.Crown, tint: "#bfc8c0" } },
-      { id: "rot_vampire", name: "Вампирша", title: "Госпожа крови", description: "Пьёт жизнь врагов и лечит свои отряды.",
+      { id: "rot_vampire", classes: [{ id: "monk", spec: "monk_arts" }, { id: "mage", spec: "mage_fire" }], name: "Вампирша", title: "Госпожа крови", description: "Пьёт жизнь врагов и лечит свои отряды.",
         relic: { name: "Кубок Алой Ночи", description: "Удары героя восстанавливают здоровье." }, armyBonus: "+5% вампиризма",
         model: { body: M.Robed, weapon: W.Sword, head: H.Crown, cape: true, tint: "#6a1a2a" } },
     ],
@@ -300,16 +305,16 @@ export const FACTIONS: readonly Faction[] = [
     color: "#2f7a4a",
     accent: "#b8a0f0",
     heroes: [
-      { id: "grove_druid", name: "Верховный друид", title: "Голос леса", description: "Превращается в зверя и лечит армию.",
+      { id: "grove_druid", classes: [{ id: "monk", spec: "monk_healing" }, { id: "mage", spec: "mage_earth" }], name: "Верховный друид", title: "Голос леса", description: "Превращается в зверя и лечит армию.",
         relic: { name: "Посох Первого Дуба", description: "Отряды в начале хода лечатся." }, armyBonus: "+10% здоровья зверей",
         model: { body: M.Robed, weapon: W.Staff, head: H.Antlers, tint: "#5a7a3a" } },
-      { id: "grove_huntress", name: "Охотница", title: "Тень опушки", description: "Лучшая лучница леса, ведёт стрелков.",
+      { id: "grove_huntress", classes: [{ id: "warrior", spec: "warrior_dual" }], name: "Охотница", title: "Тень опушки", description: "Лучшая лучница леса, ведёт стрелков.",
         relic: { name: "Лук Лунного Серпа", description: "Выстрелы героя проходят сквозь цель." }, armyBonus: "+1 к атаке стрелков",
         model: { body: M.Soldier, weapon: W.Bow, head: H.Hood, cape: true, tint: "#3a6a4a" } },
-      { id: "grove_warden", name: "Страж рощи", title: "Шипы и кора", description: "Танк леса, отражает урон обратно.",
+      { id: "grove_warden", classes: [{ id: "warrior", spec: "warrior_shield" }, { id: "monk", spec: "monk_healing" }], name: "Страж рощи", title: "Шипы и кора", description: "Танк леса, отражает урон обратно.",
         relic: { name: "Кора Древня", description: "Атакующие героя получают урон шипами." }, armyBonus: "+2 к защите древней",
         model: { body: M.Knight, weapon: W.Spear, head: H.Antlers, shield: true, tint: "#6a5a3a" } },
-      { id: "grove_moonpriestess", name: "Жрица луны", title: "Серебряный свет", description: "Магия луны и звёзд, усиливает фей.",
+      { id: "grove_moonpriestess", classes: [{ id: "monk", spec: "monk_light" }, { id: "mage", spec: "mage_air" }], name: "Жрица луны", title: "Серебряный свет", description: "Магия луны и звёзд, усиливает фей.",
         relic: { name: "Лунный венец", description: "Ночью заклинания сильнее." }, armyBonus: "+15% урона заклинателей",
         model: { body: M.Robed, weapon: W.Staff, head: H.Crown, cape: true, tint: "#7a6ab8" } },
     ],
@@ -383,4 +388,27 @@ export function defaultArmy({ faction, level }: { faction: FactionId; level: num
   const open = f.tiers.filter((t) => t.unlockLevel <= level).map((t) => t.units[0]);
   const share = Math.floor(leadership(level) / open.length);
   return open.map((u) => ({ unitId: u.id, count: Math.floor(share / u.cost) })).filter((s) => s.count > 0);
+}
+
+/** Level at which a faction hero's second class line opens. */
+export const SECOND_LINE_LEVEL = 6;
+const MAX_LINE_RANK = 5;
+
+/**
+ * Class ranks of a faction hero at a level. The hero gets 1 rank at level 1 and +1 every 3rd level.
+ * With two lines, the second one opens at level 6 and gets a third of the ranks (at least 1).
+ */
+export function heroClasses({ hero, level }: { hero: FactionHero; level: number }): (HeroClassLine & { rank: number })[] {
+  const points = 1 + Math.floor(level / 3);
+  const [main, second] = hero.classes;
+  const secondRank = second && level >= SECOND_LINE_LEVEL ? Math.min(MAX_LINE_RANK, Math.max(1, Math.floor(points / 3))) : 0;
+  const mainRank = Math.min(MAX_LINE_RANK, points - secondRank);
+  const lines = [{ ...main, rank: mainRank }];
+  return secondRank && second ? [...lines, { ...second, rank: secondRank }] : lines;
+}
+
+/** The faction hero chosen by this hero row, if any. */
+export function factionHeroOf({ faction, heroId }: { faction: string | null; heroId: string | null }): FactionHero | undefined {
+  const f = faction ? getFaction(faction) : undefined;
+  return f && heroId ? getFactionHero(f, heroId) : undefined;
 }

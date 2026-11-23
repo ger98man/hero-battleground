@@ -12,7 +12,22 @@ import {
   xpForNextLevel,
   type HeroBuild,
 } from "../game/build.js";
-import { armyCost, leadership, MAX_ARMY_STACKS, parseArmy, type ArmyStack } from "../game/factions.js";
+import { armyCost, factionHeroOf, heroClasses, leadership, MAX_ARMY_STACKS, parseArmy, type ArmyStack } from "../game/factions.js";
+
+/**
+ * Classes come from the chosen faction hero and the level (see heroClasses), not from the player.
+ * A hero without a faction hero has no classes yet and has to pick one first.
+ */
+export function withHeroClasses(hero: HeroRow): HeroRow {
+  const factionHero = factionHeroOf({ faction: hero.faction, heroId: hero.faction_hero });
+  const classes = factionHero ? heroClasses({ hero: factionHero, level: hero.level }) : [];
+  return { ...hero, build: { ...hero.build, classes } };
+}
+
+/** The name shown next to the hero: the faction hero (Паладин, Некромант…), or the class for old data. */
+export function heroTitle({ faction, factionHero, build }: { faction: string | null; factionHero: string | null; build: HeroBuild }): string {
+  return factionHeroOf({ faction, heroId: factionHero })?.name ?? overallClass(build).name;
+}
 
 type Db = Pick<PoolClient, "query">;
 
@@ -38,11 +53,7 @@ export async function getHeroByUser(userId: number, db: Db = pool, forUpdate = f
     [userId],
   );
   const hero = rows[0];
-  if (hero) {
-    hero.build = parseBuild(hero.build);
-    hero.army = parseArmy(hero.army);
-  }
-  return hero;
+  return hero ? withHeroClasses({ ...hero, build: parseBuild(hero.build), army: parseArmy(hero.army) }) : undefined;
 }
 
 export async function getHeroById(heroId: number, db: Db = pool, forUpdate = false): Promise<HeroRow | undefined> {
@@ -52,15 +63,12 @@ export async function getHeroById(heroId: number, db: Db = pool, forUpdate = fal
     [heroId],
   );
   const hero = rows[0];
-  if (hero) {
-    hero.build = parseBuild(hero.build);
-    hero.army = parseArmy(hero.army);
-  }
-  return hero;
+  return hero ? withHeroClasses({ ...hero, build: parseBuild(hero.build), army: parseArmy(hero.army) }) : undefined;
 }
 
 /** Everything the hero page shows: progress, build, derived stats, relic. */
-export function heroView(hero: HeroRow) {
+export function heroView(row: HeroRow) {
+  const hero = withHeroClasses(row);
   const b = hero.build;
   const hasClass = b.classes.length > 0;
   const profile = hasClass ? combatProfile(hero.level, b) : null;
@@ -76,7 +84,7 @@ export function heroView(hero: HeroRow) {
     botLosses: hero.bot_losses,
     build: b,
     needsClass: !hasClass,
-    className: overallClass(b).name,
+    className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: b }),
     limits: {
       classPoints: classPoints(hero.level),
       classPointsUsed: b.classes.reduce((sum, c) => sum + c.rank, 0),

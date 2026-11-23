@@ -5,13 +5,14 @@
  */
 import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
-import { combatProfile, overallClass, parseBuild } from "../game/build.js";
+import { combatProfile, parseBuild } from "../game/build.js";
 import { createBattle, other, timeoutTurn, type BattleEvent, type BattleState, type Side } from "../game/battle.js";
 import { broadcastEvent, postSystemMessage, sendToUser } from "../realtime/chat.js";
 import {
   getHeroById,
   getHeroByUser,
   grantHeroBattleResult,
+  heroTitle,
   type HeroRow,
 } from "./heroes.js";
 
@@ -116,7 +117,7 @@ export interface ChallengeView {
 
 export async function listChallenges(viewerHeroId: number): Promise<ChallengeView[]> {
   const { rows } = await pool.query(
-    `SELECT c.id::int, h.name AS "heroName", c.level, c.mode, h.build,
+    `SELECT c.id::int, h.name AS "heroName", c.level, c.mode, h.build, h.faction, h.faction_hero AS "factionHero",
             c.created_at AS "createdAt", c.expires_at AS "expiresAt", c.hero_id::int AS "heroId"
        FROM battle_challenges c JOIN heroes h ON h.id = c.hero_id
       WHERE c.status = 'open' AND c.expires_at > now()
@@ -129,7 +130,7 @@ export async function listChallenges(viewerHeroId: number): Promise<ChallengeVie
       heroName: r.heroName,
       level: r.level,
       mode: r.mode,
-      className: overallClass(parseBuild(r.build)).name,
+      className: heroTitle({ faction: r.faction, factionHero: r.factionHero, build: parseBuild(r.build) }),
       createdAt: r.createdAt.toISOString(),
       expiresAt: r.expiresAt.toISOString(),
       mine: r.heroId === viewerHeroId,
@@ -157,7 +158,7 @@ export async function createChallenge(userId: number): Promise<number> {
     // Locking the hero row serializes this with starting a bot battle and joining challenges.
     const hero = await getHeroByUser(userId, client, true);
     if (!hero) throw new PvpError("Герой не найден", 404);
-    if (!hero.build.classes.length) throw new PvpError("Сначала выберите класс");
+    if (!hero.build.classes.length) throw new PvpError("Сначала выберите фракцию и героя");
     if (await heroInBattle(client, hero.id)) throw new PvpError("Вы уже в бою", 409);
     if (await openChallengeOf(client, hero.id)) throw new PvpError("У вас уже есть заявка", 409);
     await expireOld(client);
@@ -248,7 +249,7 @@ export async function joinChallenge(userId: number, challengeId: number): Promis
 
 function fighterOf(hero: HeroRow) {
   if (!hero.build.classes.length) return null;
-  return { name: hero.name, level: hero.level, profile: combatProfile(hero.level, hero.build) };
+  return { name: hero.name, level: hero.level, profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } };
 }
 
 async function expireOld(db: Db): Promise<number> {

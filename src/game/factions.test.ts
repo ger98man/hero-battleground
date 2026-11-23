@@ -45,3 +45,27 @@ test("parseArmy keeps only the expected shape", () => {
     { unitId: "", count: 0 },
   ]);
 });
+
+test("faction heroes replace classes: their class lines are playable and legal at every level", async () => {
+  const { getClass } = await import("./classes.js");
+  const { validateBuild } = await import("./build.js");
+  const { heroClasses } = await import("./factions.js");
+  for (const f of FACTIONS) {
+    for (const h of f.heroes) {
+      assert.ok(h.classes.length >= 1 && h.classes.length <= 2, h.name);
+      for (const line of h.classes) {
+        const def = getClass(line.id);
+        assert.ok(def?.playable, `${h.name}: ${line.id}`);
+        assert.ok(def?.specs.some((s) => s.id === line.spec), `${h.name}: ${line.spec}`);
+      }
+      for (let level = 1; level <= 30; level++) {
+        const classes = heroClasses({ hero: h, level });
+        assert.equal(validateBuild({ classes, talents: [], loadout: [] }, level), null, `${h.name} at level ${level}`);
+      }
+    }
+  }
+  const paladin = FACTIONS[0].heroes[0];
+  assert.deepEqual(heroClasses({ hero: paladin, level: 5 }).map((c) => c.rank), [2], "second line closed before level 6");
+  assert.deepEqual(heroClasses({ hero: paladin, level: 6 }).map((c) => c.rank), [2, 1]);
+  assert.deepEqual(heroClasses({ hero: paladin, level: 12 }).map((c) => c.rank), [4, 1]);
+});
