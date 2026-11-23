@@ -11,7 +11,11 @@ import {
   reachableCells,
   skillBlocker,
   startBattle,
-  turnQueue,
+  actorQueue,
+  activeActor,
+  activeStack,
+  stackReachable,
+  stackTargets,
   unitSkill,
   visibleCells,
   type BattleAction,
@@ -21,6 +25,7 @@ import {
 } from "../game/battle.js";
 import { randomBuild, simpleBot } from "../game/bot.js";
 import { combatProfile } from "../game/build.js";
+import { defaultArmy, FACTIONS } from "../game/factions.js";
 import { postSystemMessage } from "../realtime/chat.js";
 import { getHeroByUser, grantHeroBattleResult, heroTitle, type HeroRow } from "../services/heroes.js";
 import {
@@ -51,12 +56,14 @@ const flipStatus = (st: BattleState["status"]) => (st === "won" ? "lost" : st ==
  */
 function asSeenBy(s: BattleState, side: Side): BattleState {
   if (side === "player") return s;
-  const flip = <T>(r: Record<Side, T>): Record<Side, T> => ({ player: r.bot, bot: r.player });
+  const flipActor = (id: string | undefined) => (id === "player" ? "bot" : id === "bot" ? "player" : id);
   return {
     ...s,
     units: { player: { ...s.units.bot, side: "player" }, bot: { ...s.units.player, side: "bot" } },
+    stacks: s.stacks?.map((st) => ({ ...st, side: other(st.side) })),
     turn: other(s.turn),
-    nextTime: flip(s.nextTime),
+    active: flipActor(s.active),
+    nextTime: { ...s.nextTime, player: s.nextTime.bot, bot: s.nextTime.player },
     tieFirst: other(s.tieFirst),
     status: flipStatus(s.status),
   };
@@ -77,6 +84,9 @@ function battleView(row: BattleRow, heroId: number) {
   const rewards = row.mode === "pvp" ? ((row.rewards as PvpRewards | null)?.byHero[heroId] ?? null) : row.rewards;
   const player = s.units.player;
   const myTurn = s.status === "active" && s.turn === "player";
+  const stack = activeStack(s);
+  const heroTurn = myTurn && !stack;
+  const stackTurn = myTurn && stack ? stack : undefined;
   return {
     id: row.id,
     mode: row.mode,
@@ -86,23 +96,28 @@ function battleView(row: BattleRow, heroId: number) {
     /** PvP: when the current turn ends automatically (ISO), and the server clock to correct for drift. */
     turnDeadline: row.turn_deadline ? row.turn_deadline.toISOString() : null,
     serverNow: new Date().toISOString(),
-    queue: s.status === "active" ? turnQueue(s, 8) : [],
+    queue: s.status === "active" ? actorQueue(s, 10) : [],
+    active: activeActor(s),
     skills: player.skills.map((id, i) => {
       const sk = unitSkill(id);
       return {
         ...sk,
         basic: i === 0,
         cooldownLeft: player.cooldowns[sk.id] ?? 0,
-        blocker: myTurn ? skillBlocker(player, sk) : "Сейчас не ваш ход",
+        blocker: heroTurn ? skillBlocker(player, sk) : stackTurn ? "Сейчас ходит отряд" : "Сейчас не ваш ход",
       };
     }),
     botSkills: s.units.bot.skills.map((id) => {
       const sk = unitSkill(id);
       return { id: sk.id, name: sk.name, icon: sk.icon };
     }),
-    reachable: myTurn ? [...reachableCells(s, "player").keys()].map((k) => k.split(",").map(Number)) : [],
+    reachable: heroTurn
+      ? [...reachableCells(s, "player").keys()].map((k) => k.split(",").map(Number))
+      : stackTurn ? [...stackReachable(s, stackTurn).keys()].map((k) => k.split(",").map(Number)) : [],
     /** Cells the player can target from the current position (line of sight). */
-    visible: myTurn ? visibleCells(s, "player") : [],
+    visible: heroTurn ? visibleCells(s, "player") : [],
+    /** Stack turn: enemy cells the active stack can attack now. */
+    targets: stackTurn ? stackTargets(s, stackTurn) : [],
   };
 }
 
@@ -138,12 +153,13 @@ battleRouter.post("/", async (req, res) => {
     return;
   }
   const state = createBattle(
-    { name: hero.name, level: hero.level, profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } },
+    { name: hero.name, level: hero.level, army: hero.army, profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } },
     {
       name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
-      // The bot has the same level and a random legal build.
+      // The bot has the same level, a random legal build and the starting army of a random faction.
       level: hero.level,
       profile: combatProfile(hero.level, randomBuild(hero.level)),
+      army: hero.army.length ? defaultArmy({ faction: FACTIONS[Math.floor(Math.random() * FACTIONS.length)].id, level: hero.level }) : [],
     },
   );
   const events = startBattle(state, simpleBot);
@@ -207,12 +223,15 @@ function parseAction(req: Request): BattleAction | null {
   switch (b.type) {
     case "move":
       return Number.isInteger(x) && Number.isInteger(y) ? { type: "move", x, y } : null;
+    case "attack":
+      return Number.isInteger(x) && Number.isInteger(y) ? { type: "attack", x, y } : null;
     case "skill":
       return typeof b.skillId === "string" && Number.isInteger(x) && Number.isInteger(y)
         ? { type: "skill", skillId: b.skillId, x, y }
         : null;
     case "end_turn":
     case "surrender":
+    case "auto":
       return { type: b.type };
     default:
       return null;
@@ -286,8 +305,9 @@ async function pvpAction(client: PoolClient, res: Response, row: BattleRow, hero
   const events: BattleEvent[] = [];
   // A turn that already ran out ends first, so a late click cannot act on the opponent's time.
   const timedOut = await applyTimeout(client, row, events);
+  const actorBefore = `${row.state.turn}:${activeActor(row.state)}:${row.state.time}`;
   try {
-    events.push(...applySideAction(row.state, sideOf(row, heroId), action));
+    events.push(...applySideAction(row.state, sideOf(row, heroId), action, Math.random, simpleBot));
   } catch (err) {
     if (!(err instanceof BattleError)) throw err;
     await client.query(timedOut ? "COMMIT" : "ROLLBACK");
@@ -298,7 +318,7 @@ async function pvpAction(client: PoolClient, res: Response, row: BattleRow, hero
     res.status(400).json({ error: timedOut ? "Время хода вышло" : err.message });
     return;
   }
-  await savePvp(client, row, action.type === "end_turn");
+  await savePvp(client, row, actorBefore !== `${row.state.turn}:${activeActor(row.state)}:${row.state.time}`);
   await client.query("COMMIT");
   void notifyBattle(row);
   if (row.state.status !== "active") announcePvpResult(row);

@@ -11,6 +11,7 @@ import {
   type BattleState,
   type BotTurn,
   type Rng,
+  type Side,
   type Unit,
 } from "./battle.js";
 
@@ -69,9 +70,13 @@ function defensiveNeed(skill: Skill, me: Unit): boolean {
  * Simple bot: restore armor / heal when low, otherwise use the strongest skill in range,
  * walking towards the player first if nothing reaches.
  */
-export const simpleBot: BotTurn = (state: BattleState, act: (a: BattleAction) => void) => {
-  const me = state.units.bot;
-  const foe = state.units.player;
+/** Plays the hero of the side whose turn it is: the bot, or the player's hero in auto battle. */
+export const simpleBot: BotTurn = (state: BattleState, act: (a: BattleAction) => void) => heroAi(state, state.turn, act);
+
+/** The same simple tactics for any side (the bot, or the player's hero in auto battle). */
+export function heroAi(state: BattleState, side: Side, act: (a: BattleAction) => void): void {
+  const me = state.units[side];
+  const foe = state.units[side === "bot" ? "player" : "bot"];
   const skills = me.skills.map(unitSkill);
 
   const usable = (s: Skill) => skillBlocker(me, s) === null;
@@ -102,7 +107,7 @@ export const simpleBot: BotTurn = (state: BattleState, act: (a: BattleAction) =>
   const reaches = (x: number, y: number) => distance(x, y, foe.x, foe.y) <= wantRange && hasLineOfSight(state, x, y, foe.x, foe.y);
   const current = distance(me.x, me.y, foe.x, foe.y);
   let best: { x: number; y: number; score: number } | null = null;
-  for (const [key, path] of reachableCells(state, "bot")) {
+  for (const [key, path] of reachableCells(state, side)) {
     const [x, y] = key.split(",").map(Number);
     const d = distance(x, y, foe.x, foe.y);
     const score = (reaches(x, y) ? 0 : 100 + d) + path.length * 0.1;
@@ -111,4 +116,5 @@ export const simpleBot: BotTurn = (state: BattleState, act: (a: BattleAction) =>
   const stayScore = reaches(me.x, me.y) ? 0 : 100 + current;
   if (best && best.score < stayScore) act({ type: "move", x: best.x, y: best.y });
   useBest();
-};
+}
+

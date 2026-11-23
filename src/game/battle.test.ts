@@ -211,3 +211,87 @@ test("pvp: a stunned side's turn is skipped", () => {
   assert.equal(state.turn, "player");
   assert.ok(state.log.some((l) => l.includes("B пропускает ход")));
 });
+
+// ---------- Armies ----------
+import { actorQueue, activeStack, stackAi, stackReachable, stackTargets, ARMY_GRID_WIDTH } from "./battle.js";
+import { defaultArmy, FactionId } from "./factions.js";
+
+const armyFighter = (name: string, faction: FactionId, level = 12): Fighter => ({
+  ...fighter(name, WARRIOR, level),
+  army: defaultArmy({ faction, level }),
+});
+
+/** Player side: hero plays like playRound, stacks use the same AI as the bot. */
+function playArmyTurn(state: BattleState, rng: () => number) {
+  const st = activeStack(state);
+  if (!st) return playRound(state, rng);
+  stackAi(state, st, rng, []);
+  if (state.status === "active" && state.turn === "player" && activeStack(state)?.id === st.id) {
+    applyPlayerAction(state, { type: "end_turn" }, simpleBot, rng);
+  }
+}
+
+test("armies: stacks are placed, take turns on the timeline and battles finish", () => {
+  for (let seed = 1; seed <= 12; seed++) {
+    const rng = seeded(seed);
+    const state = createBattle(armyFighter("P", FactionId.Dawn), armyFighter("B", FactionId.Rot), rng);
+    assert.equal(state.width, ARMY_GRID_WIDTH);
+    assert.equal(state.stacks?.length, 14);
+    const cells = new Set([...state.stacks!.map((s) => `${s.x},${s.y}`), `${state.units.player.x},${state.units.player.y}`, `${state.units.bot.x},${state.units.bot.y}`]);
+    assert.equal(cells.size, 16, "nobody shares a cell");
+    assert.ok(actorQueue(state, 10).some((a) => a.id !== "player" && a.id !== "bot"), "stacks are in the queue");
+    startBattle(state, simpleBot, rng);
+    for (let i = 0; i < 400 && state.status === "active"; i++) playArmyTurn(state, rng);
+    assert.notEqual(state.status, "active", `seed ${seed} finished`);
+  }
+});
+
+test("armies: melee attack on a stack gets one counter-attack, shooters do not provoke it", () => {
+  const rng = seeded(3);
+  const state = createBattle(armyFighter("P", FactionId.Dawn), armyFighter("B", FactionId.Ash), rng);
+  const mine = state.stacks!.find((s) => s.side === "player" && !s.ranged && !s.flyer)!;
+  const theirs = state.stacks!.find((s) => s.side === "bot")!;
+  theirs.x = 6; theirs.y = 7; mine.x = 5; mine.y = 7;
+  state.turn = "player"; state.active = mine.id; mine.moved = false; mine.attacked = false;
+  assert.ok(stackTargets(state, mine).some(([x, y]) => x === 6 && y === 7));
+  const events = applyPlayerAction(state, { type: "attack", x: 6, y: 7 }, simpleBot, rng);
+  const firstHit = events.findIndex((e) => e.type === "stack-damage" && e.id === theirs.id);
+  assert.ok(firstHit >= 0, "the target took damage");
+  const counter = events[firstHit + 1];
+  assert.ok(theirs.count === 0 || (counter?.type === "reaction" && counter.name === "Ответный удар"), "the target strikes back");
+  const shooter = state.stacks!.find((s) => s.side === "player" && s.ranged && s.count > 0);
+  if (shooter && state.status === "active") {
+    state.turn = "player"; state.active = shooter.id; shooter.attacked = false; shooter.moved = false;
+    const visible = stackTargets(state, shooter);
+    const target = state.stacks!.find((s) => s.side === "bot" && s.count > 0 && visible.some(([x, y]) => x === s.x && y === s.y))!;
+    target.retaliated = false;
+    const shot = applyPlayerAction(state, { type: "attack", x: target.x, y: target.y }, simpleBot, rng);
+    const hit = shot.findIndex((e) => e.type === "stack-damage" && e.id === target.id);
+    assert.ok(hit >= 0 && !(shot[hit + 1]?.type === "reaction"), "no counter-attack on a ranged shot");
+  }
+});
+
+test("armies: flyers ignore obstacles, walkers cannot step on bodies", () => {
+  const state = createBattle(armyFighter("P", FactionId.Dawn), armyFighter("B", FactionId.Rot));
+  const walker = state.stacks!.find((s) => s.side === "player" && !s.flyer)!;
+  for (const key of stackReachable(state, walker).keys()) {
+    const [x, y] = key.split(",").map(Number);
+    assert.ok(!state.obstacles.some(([ox, oy]) => ox === x && oy === y));
+    assert.ok(!state.stacks!.some((s) => s.count > 0 && s.x === x && s.y === y));
+  }
+  const flyer = state.stacks!.find((s) => s.side === "player" && s.flyer)!;
+  assert.ok(stackReachable(state, flyer).size > stackReachable(state, walker).size);
+});
+
+test("auto battle: the AI plays the player's hero and stacks until the battle ends", () => {
+  for (let seed = 1; seed <= 6; seed++) {
+    const rng = seeded(seed + 40);
+    const state = createBattle(armyFighter("P", FactionId.Grove), armyFighter("B", FactionId.Ash), rng);
+    startBattle(state, simpleBot, rng);
+    for (let i = 0; i < 400 && state.status === "active"; i++) applyPlayerAction(state, { type: "auto" }, simpleBot, rng);
+    assert.notEqual(state.status, "active");
+  }
+  const pvp = createBattle(armyFighter("A", FactionId.Dawn), armyFighter("B", FactionId.Rot), seeded(9), "pvp");
+  for (let i = 0; i < 600 && pvp.status === "active"; i++) applySideAction(pvp, pvp.turn, { type: "auto" }, seeded(i), simpleBot);
+  assert.notEqual(pvp.status, "active");
+});
