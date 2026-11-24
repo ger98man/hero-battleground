@@ -16,6 +16,7 @@ import type { CombatProfile } from "./build.js";
 import { skillById } from "./build.js";
 import type { ArmorType, DamageType, PassiveMods, ScaleStat, Skill } from "./classes.js";
 import { getUnit, UnitRole, type ArmyStack } from "./factions.js";
+import { effectiveDefense } from "./stats.js";
 
 export type Side = "player" | "bot";
 export type Rng = () => number;
@@ -48,6 +49,8 @@ export interface Unit {
   speedBonus: number;
   dodge: number;
   parry: number;
+  /** Мастерство: lowers the enemy's parry and dodge chance. Missing in battles saved before 0.10. */
+  mastery?: number;
   x: number;
   y: number;
   movesLeft: number;
@@ -85,6 +88,8 @@ export interface Stack {
   attack: number;
   defense: number;
   damage: [number, number];
+  /** Damage multiplier from the hero's stat matching the unit's attribute (1 in older battles). */
+  damageMult?: number;
   initiative: number;
   speed: number;
   x: number;
@@ -188,7 +193,7 @@ export interface Fighter {
   figure?: { faction: string; hero: string };
 }
 
-function makeStacks(side: Side, army: ArmyStack[], column: number, prefix: string): Stack[] {
+function makeStacks(side: Side, army: ArmyStack[], column: number, prefix: string, hero: CombatProfile): Stack[] {
   const units = army.flatMap((a) => {
     const u = getUnit(a.unitId);
     return u && a.count > 0 ? [{ u, count: a.count }] : [];
@@ -209,6 +214,7 @@ function makeStacks(side: Side, army: ArmyStack[], column: number, prefix: strin
     attack: u.attack,
     defense: u.defense,
     damage: [u.damage[0], u.damage[1]],
+    damageMult: hero.unitDamage?.[u.attribute] ?? 1,
     initiative: u.initiative,
     speed: u.speed,
     x: column,
@@ -239,6 +245,7 @@ function makeUnit(side: Side, f: Fighter, x: number, y: number): Unit {
     speedBonus: p.speedBonus,
     dodge: p.dodge,
     parry: p.parry,
+    mastery: p.stats.mastery,
     x,
     y,
     movesLeft: p.moveRange,
@@ -272,7 +279,7 @@ export function createBattle(player: Fighter, bot: Fighter, rng: Rng = Math.rand
   const bi = bot.profile.stats.initiative;
   const first: Side = pi > bi ? "player" : bi > pi ? "bot" : rng() < 0.5 ? "player" : "bot";
   const stacks = hasArmies
-    ? [...makeStacks("player", player.army ?? [], 1, "a"), ...makeStacks("bot", bot.army ?? [], width - 2, "b")]
+    ? [...makeStacks("player", player.army ?? [], 1, "a", player.profile), ...makeStacks("bot", bot.army ?? [], width - 2, "b", bot.profile)]
     : [];
   const state: BattleState = {
     version: 2,
@@ -544,15 +551,16 @@ function payMana(state: BattleState, unit: Unit, mana: number) {
 /** Damage effects of a skill against `target` (used by skills and reactions). */
 function resolveEffects(state: BattleState, caster: Unit, target: Unit, skill: Skill, rng: Rng, events: BattleEvent[]) {
   const enemy = state.units[other(caster.side)];
-  // Dodge / parry: only physical attacks; parry only in melee.
+  // Dodge / parry: only physical attacks; parry only in melee. The attacker's Мастерство lowers both.
   const firstDamage = skill.effects.find((e) => e.type === "damage");
   if (skill.target === "enemy" && firstDamage?.type === "damage" && firstDamage.damageType === "physical") {
-    if (rng() < enemy.dodge) {
+    const mastery = caster.mastery ?? 0;
+    if (rng() < effectiveDefense(enemy.dodge, mastery)) {
       events.push({ type: "miss", side: enemy.side, reason: "dodge" });
       log(state, `${enemy.name} уклоняется от «${skill.name}».`);
       return;
     }
-    if (distance(caster.x, caster.y, enemy.x, enemy.y) <= 1 && rng() < enemy.parry) {
+    if (distance(caster.x, caster.y, enemy.x, enemy.y) <= 1 && rng() < effectiveDefense(enemy.parry, mastery)) {
       events.push({ type: "miss", side: enemy.side, reason: "parry" });
       log(state, `${enemy.name} парирует «${skill.name}».`);
       return;
@@ -660,7 +668,7 @@ function stackStrike(attacker: Stack, defense: number, rng: Rng): number {
   const perCreature = lo + rng() * (hi - lo);
   const diff = attacker.attack - defense;
   const mult = diff >= 0 ? Math.min(3, 1 + 0.05 * diff) : 1 / (1 + 0.05 * -diff);
-  return attacker.count * perCreature * mult;
+  return attacker.count * perCreature * mult * (attacker.damageMult ?? 1);
 }
 
 type StrikeTarget = { hero: Side } | { stack: Stack };
@@ -671,6 +679,17 @@ function strike(state: BattleState, attacker: Stack, target: StrikeTarget, rng: 
     return;
   }
   const hero = state.units[target.hero];
+  // The hero dodges stack attacks with Ловкость and parries melee ones with Сила (stacks have no Мастерство).
+  if (rng() < hero.dodge) {
+    events.push({ type: "miss", side: hero.side, reason: "dodge" });
+    log(state, `${hero.name} уклоняется от атаки «${attacker.name}».`);
+    return;
+  }
+  if (!attacker.ranged && distance(attacker.x, attacker.y, hero.x, hero.y) <= 1 && rng() < hero.parry) {
+    events.push({ type: "miss", side: hero.side, reason: "parry" });
+    log(state, `${hero.name} парирует атаку «${attacker.name}».`);
+    return;
+  }
   dealDamage(state, hero, stackStrike(attacker, 0, rng) * STACK_VS_HERO, "physical", label, events);
   finish(state, events);
 }

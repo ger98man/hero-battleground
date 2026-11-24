@@ -2,12 +2,13 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const ROMAN = ["", "I", "II", "III", "IV", "V"];
 const STAT_HINTS = {
-  strength: "урон силовых умений, шанс парирования",
-  dexterity: "урон ловких умений, шанс уклонения",
-  intellect: "магический урон, мана, магическая броня",
-  mastery: "слоты умений в бою",
-  initiative: "частота ходов и перемещение",
-  stamina: "здоровье и броня",
+  strength: "физический урон, урон силовых умений и отрядов на Силу, шанс парирования",
+  dexterity: "урон ловких умений и отрядов на Ловкость, шанс уклонения",
+  intellect: "запас маны, урон заклинаний и отрядов на Интеллект",
+  mastery: "шанс попасть по тому, кто парирует или уклоняется, шанс особых эффектов",
+  initiative: "очерёдность и частота ходов, перемещение",
+  health: "очки жизни героя",
+  craft: "ремесло: производство, торговля, починка (позже)",
 };
 const DMG = { physical: "физ.", magic: "маг." };
 const STAT_SHORT = { strength: "Сила", dexterity: "Ловкость", intellect: "Интеллект" };
@@ -69,7 +70,7 @@ async function saveBuild(build) {
 
 const cloneBuild = () => JSON.parse(JSON.stringify(hero.build));
 
-const STAT_ICONS = { strength: "✊", dexterity: "🪶", intellect: "📖", mastery: "🔮", initiative: "⏳", stamina: "🛡️" };
+const STAT_ICONS = { strength: "✊", dexterity: "🪶", intellect: "📖", mastery: "🎯", initiative: "⏳", health: "❤️", craft: "⚒️" };
 
 function vitalBar(name, cls, value) {
   return `<div class="vital"><span class="vital-name">${name}</span><div class="bar ${cls}"><div style="width:100%"></div><span>${value} / ${value}</span></div></div>`;
@@ -99,8 +100,15 @@ function render() {
         ["Скорость ходов", `+${Math.round(p.speedBonus * 100)}%`],
         ["Уклонение", `${Math.round(p.dodge * 100)}%`],
         ["Парирование", `${Math.round(p.parry * 100)}%`],
+        ["Мастерство против защиты", `−${Math.round(p.masteryVsDefense * 100)}%`],
+        ["Особые эффекты", `+${Math.round(p.procBonus * 100)}%`],
+        ["Урон отрядов (Сила / Ловк. / Инт.)", ["strength", "dexterity", "intellect"].map((k) => `+${Math.round((p.unitDamage[k] - 1) * 100)}%`).join(" / ")],
       ].map(([n, v]) => `<div class="stat"><span>${n}</span><b>${v}</b></div>`).join("")
     : "";
+  const pendingPicks = (h.guilds ?? []).reduce((sum, g) => sum + g.pendingPicks, 0);
+  $("guild-badge").textContent = pendingPicks ? `+${pendingPicks}` : "";
+  $("guild-badge").classList.toggle("hidden", !pendingPicks);
+  $("guild-badge").title = "Можно выбрать характеристику за уровень гильдии";
   $("pvp").textContent = `${h.wins} / ${h.losses}`;
   $("bot").textContent = `${h.botWins} / ${h.botLosses}`;
   for (const b of $("tabs").querySelectorAll("button")) b.classList.toggle("active", b.dataset.tab === tab);
@@ -145,7 +153,7 @@ function skillsTab() {
     const why = s.rank > c.rank ? `нужен ${def.name} ${ROMAN[s.rank]}` : `специализация «${def.specs.find((x) => x.id === s.spec)?.name}»`;
     return `<div class="muted locked">${s.icon} ${esc(s.name)} — ${why}</div>`;
   }).join("");
-  return `<p class="muted">Слоты умений в бою: ${chosen.size} / ${limits.skillSlots} (Мастерство: +1 слот за каждые ${catalog.rules.MASTERY_PER_SLOT}). Обычная атака всегда доступна.</p>
+  return `<p class="muted">Слоты умений в бою: ${chosen.size} / ${limits.skillSlots} (+1 слот за каждые ${catalog.rules.LEVELS_PER_SLOT} уровней героя). Обычная атака всегда доступна.</p>
     ${skillHtml(basicSkill, `<input type="checkbox" checked disabled>`)}${rows}
     ${lockedHtml ? `<p><b>Пока недоступны</b></p>${lockedHtml}` : ""}`;
 }

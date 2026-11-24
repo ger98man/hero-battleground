@@ -6,6 +6,7 @@
  * All names are working titles until the game owner approves them.
  * The `model` of a hero or unit tells the client how to draw its placeholder figure (public/models.js).
  */
+import type { UnitAttribute } from "./stats.js";
 
 export enum FactionId {
   Dawn = "dawn",
@@ -86,6 +87,8 @@ export type UnitDef = {
   speed: number;
   /** Leadership spent per creature. */
   cost: number;
+  /** Main stat of the unit: its damage grows with the hero's value of this stat. */
+  attribute: UnitAttribute;
   model: ModelSpec;
 };
 
@@ -153,6 +156,15 @@ const ROLE_SPEED: Record<UnitRole, number> = {
   [UnitRole.Siege]: 2,
 };
 
+/** Main stat by role (placeholder until units get their own): melee and siege — Сила, shooters and flyers — Ловкость, casters — Интеллект. */
+const ROLE_ATTRIBUTE: Record<UnitRole, UnitAttribute> = {
+  [UnitRole.Melee]: "strength",
+  [UnitRole.Siege]: "strength",
+  [UnitRole.Ranged]: "dexterity",
+  [UnitRole.Flyer]: "dexterity",
+  [UnitRole.Caster]: "intellect",
+};
+
 function unit(tier: number, input: UnitInput): UnitDef {
   const i = tier - 1;
   const hp = Math.round(TIER_HP[i] * (input.hp ?? 1));
@@ -169,6 +181,7 @@ function unit(tier: number, input: UnitInput): UnitDef {
     initiative: 10 + (input.initiative ?? 0),
     speed: ROLE_SPEED[input.role] + (input.speed ?? 0),
     cost: TIER_COST[i],
+    attribute: ROLE_ATTRIBUTE[input.role],
     model: input.model,
   };
 }

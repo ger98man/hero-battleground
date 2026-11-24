@@ -9,7 +9,7 @@ import {
   getClass,
   getHybrid,
   getTalent,
-  MASTERY_PER_SLOT,
+  LEVELS_PER_SLOT,
   MAX_CLASS_RANK,
   MAX_CLASSES,
   MAX_SKILL_SLOTS,
@@ -19,6 +19,7 @@ import {
   type StatKey,
   type Stats,
 } from "./classes.js";
+import { dodgeFor, maxHpFor, maxManaFor, parryFor, procBonusFor, STAT_RULES, unitDamageMultiplier, type UnitAttribute } from "./stats.js";
 
 export interface BuildClass {
   id: string;
@@ -100,16 +101,20 @@ export function overallClass(build: HeroBuild): { name: string; hybrid: boolean;
   return { name: getHybrid(ranked[0].id, ranked[1].id).name, hybrid: true, classIds: [ranked[0].id, ranked[1].id] };
 }
 
-export function heroStats(level: number, build: HeroBuild): Stats {
+/** Stats from level, class ranks and `bonus` (guild levels; later equipment). */
+export function heroStats(level: number, build: HeroBuild, bonus: Partial<Stats> = {}): Stats {
+  const base = STAT_RULES.base;
   const stats: Stats = {
-    strength: 10,
-    dexterity: 10,
-    intellect: 10,
+    strength: base,
+    dexterity: base,
+    intellect: base,
     mastery: 0,
-    // Hero level: +1 Стойкость every level, +1 Инициатива every 2nd level.
-    initiative: 10 + Math.floor((level - 1) / 2),
-    stamina: 10 + (level - 1),
+    // Hero level: +1 Здоровье every level, +1 Инициатива every 2nd level.
+    initiative: base + Math.floor((level - 1) / 2),
+    health: base + (level - 1),
+    craft: 0,
   };
+  for (const [k, v] of Object.entries(bonus) as [StatKey, number][]) if (k in stats) stats[k] += v;
   for (const c of build.classes) {
     const def = getClass(c.id);
     if (!def) continue;
@@ -131,12 +136,12 @@ export function availableSkills(build: HeroBuild): Skill[] {
   return out;
 }
 
-export const skillSlotCount = (stats: Stats) => Math.min(MAX_SKILL_SLOTS, BASE_SKILL_SLOTS + Math.floor(stats.mastery / MASTERY_PER_SLOT));
+export const skillSlotCount = (level: number) => Math.min(MAX_SKILL_SLOTS, BASE_SKILL_SLOTS + Math.floor(level / LEVELS_PER_SLOT));
 
 /** Loadout actually used in battle: valid chosen skills, or the first available ones by default. */
-export function effectiveLoadout(build: HeroBuild, stats: Stats): string[] {
+export function effectiveLoadout(build: HeroBuild, level: number): string[] {
   const avail = availableSkills(build).map((s) => s.id);
-  const slots = skillSlotCount(stats);
+  const slots = skillSlotCount(level);
   const chosen = build.loadout.filter((id, i) => avail.includes(id) && build.loadout.indexOf(id) === i);
   return (chosen.length ? chosen : avail).slice(0, slots);
 }
@@ -191,6 +196,12 @@ export interface CombatProfile {
   speedBonus: number;
   dodge: number;
   parry: number;
+  /** Мастерство: taken off the enemy's parry and dodge chance. */
+  masteryVsDefense: number;
+  /** Мастерство: extra chance of special effects. */
+  procBonus: number;
+  /** Damage multiplier of the hero's army units by their attribute. */
+  unitDamage: Record<UnitAttribute, number>;
   basicSkill: string;
   skills: string[];
   skillSlots: number;
@@ -198,11 +209,13 @@ export interface CombatProfile {
   mods: PassiveMods;
 }
 
-export function combatProfile(level: number, build: HeroBuild): CombatProfile {
-  const stats = heroStats(level, build);
+export function combatProfile(level: number, build: HeroBuild, bonus: Partial<Stats> = {}): CombatProfile {
+  const stats = heroStats(level, build, bonus);
   const mods: PassiveMods = { physicalDamage: 0, magicDamage: 0, healing: 0, physicalArmor: 0, magicArmor: 0, armorOnHit: 0, magicOnPhysicalHit: 0 };
-  let physArmor = 3 * stats.stamina;
-  let magArmor = 2 * stats.stamina + stats.intellect;
+  // Armor no longer comes from a stat (Стойкость is gone): base armor grows with the level.
+  const armorBase = STAT_RULES.base + (level - 1);
+  let physArmor = 3 * armorBase;
+  let magArmor = 2 * armorBase + stats.intellect;
   for (const c of build.classes) {
     const def = getClass(c.id);
     if (!def) continue;
@@ -218,17 +231,24 @@ export function combatProfile(level: number, build: HeroBuild): CombatProfile {
   return {
     className: overallClass(build).name,
     stats,
-    maxHp: 40 + 6 * stats.stamina,
-    maxMana: 40 + 4 * stats.intellect,
+    maxHp: maxHpFor(stats.health),
+    maxMana: maxManaFor(stats.intellect),
     physicalArmor: Math.round(physArmor * (1 + mods.physicalArmor)),
     magicArmor: Math.round(magArmor * (1 + mods.magicArmor)),
     moveRange: 4 + Math.min(2, Math.floor(over(stats.initiative) / 10)),
     speedBonus: Math.min(0.15, over(stats.initiative) * 0.01),
-    dodge: Math.min(0.2, over(stats.dexterity) * 0.01),
-    parry: Math.min(0.2, over(stats.strength) * 0.01),
+    dodge: dodgeFor(stats.dexterity),
+    parry: parryFor(stats.strength),
+    masteryVsDefense: Math.min(1, stats.mastery * STAT_RULES.masteryVsDefense),
+    procBonus: procBonusFor(stats.mastery),
+    unitDamage: {
+      strength: unitDamageMultiplier(stats, "strength"),
+      dexterity: unitDamageMultiplier(stats, "dexterity"),
+      intellect: unitDamageMultiplier(stats, "intellect"),
+    },
     basicSkill: getClass(primary?.id ?? "warrior")!.basic.id,
-    skills: effectiveLoadout(build, stats),
-    skillSlots: skillSlotCount(stats),
+    skills: effectiveLoadout(build, level),
+    skillSlots: skillSlotCount(level),
     talents: [...build.talents],
     mods,
   };

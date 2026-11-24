@@ -5,13 +5,16 @@
  */
 import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
-import { combatProfile, parseBuild } from "../game/build.js";
+import { parseBuild } from "../game/build.js";
+import { getGuild, GUILD_RULES, GuildId } from "../game/guilds.js";
 import { createBattle, other, timeoutTurn, type BattleEvent, type BattleState, type Side } from "../game/battle.js";
 import { broadcastEvent, postSystemMessage, sendToUser } from "../realtime/chat.js";
 import {
   getHeroById,
   getHeroByUser,
+  grantGuildPoints,
   grantHeroBattleResult,
+  heroProfile,
   heroTitle,
   type HeroRow,
 } from "./heroes.js";
@@ -37,6 +40,8 @@ export class PvpError extends Error {
 export interface Rewards {
   experience: number;
   levelsGained: number;
+  /** Guild points for the battle (Арена for PvP, Союз Наёмников for bot battles). */
+  guild?: { id: string; name: string; points: number; levelsGained: number };
 }
 
 /** PvP rewards are stored per hero: `{ byHero: { [heroId]: Rewards } }`. */
@@ -250,7 +255,7 @@ export async function joinChallenge(userId: number, challengeId: number): Promis
 function fighterOf(hero: HeroRow) {
   if (!hero.build.classes.length) return null;
   const figure = hero.faction && hero.faction_hero ? { faction: hero.faction, hero: hero.faction_hero } : undefined;
-  return { name: hero.name, level: hero.level, army: hero.army, figure, profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } };
+  return { name: hero.name, level: hero.level, army: hero.army, figure, profile: { ...heroProfile(hero), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } };
 }
 
 async function expireOld(db: Db): Promise<number> {
@@ -274,7 +279,9 @@ export async function grantPvpRewards(client: PoolClient, row: BattleRow): Promi
     const won = side === winnerSide;
     const experience = Math.round((won ? 30 + 10 * state.units[other(side)].level : 10) * PVP_RULES.experienceMultiplier);
     const levelsGained = await grantHeroBattleResult(client, hero, won, experience, "pvp");
-    byHero[heroId] = { experience, levelsGained };
+    const points = won ? GUILD_RULES.winPoints : GUILD_RULES.lossPoints;
+    const guildLevels = await grantGuildPoints(client, hero, GuildId.Arena, points);
+    byHero[heroId] = { experience, levelsGained, guild: { id: GuildId.Arena, name: getGuild(GuildId.Arena)!.name, points, levelsGained: guildLevels } };
   }
   return { byHero };
 }

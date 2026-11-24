@@ -10,6 +10,7 @@ import { battleRouter } from "./routes/battle.js";
 import { challengesRouter } from "./routes/challenges.js";
 import { playersRouter } from "./routes/players.js";
 import { wikiRouter } from "./routes/wiki.js";
+import { guildsRouter } from "./routes/guilds.js";
 import { pool } from "./db/pool.js";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
@@ -32,6 +33,7 @@ export function createApp() {
   app.use("/api/factions", factionsRouter);
   app.use("/api/battle", battleRouter);
   app.use("/api/challenges", challengesRouter);
+  app.use("/api/guilds", guildsRouter);
   app.use("/api", playersRouter);
 
   /** While the hero is in a battle, the battle is the main screen. */
@@ -70,6 +72,11 @@ export function createApp() {
     if (!req.session.userId) return res.redirect("/login");
     if (await hasActiveBattle(req.session.userId)) return res.redirect("/battle");
     res.sendFile(path.join(publicDir, "army.html"));
+  });
+  app.get("/guilds", async (req, res) => {
+    if (!req.session.userId) return res.redirect("/login");
+    if (await hasActiveBattle(req.session.userId)) return res.redirect("/battle");
+    res.sendFile(path.join(publicDir, "guilds.html"));
   });
   app.get("/heroes/:name", (req, res) => {
     if (!req.session.userId) return res.redirect("/login");

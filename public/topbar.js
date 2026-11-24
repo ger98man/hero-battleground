@@ -10,6 +10,7 @@
     ["hero", "/hero", "Герой"],
     ["army", "/army", "Армия"],
     ["pvp", "/pvp", "Арена (PvP)"],
+    ["guilds", "/guilds", "Гильдии"],
     ["wiki", "/wiki", "Об игре"],
   ];
   bar.innerHTML = `

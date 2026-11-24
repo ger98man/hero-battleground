@@ -7,7 +7,8 @@
  * name (Воин + Монах = Паладин) and unlock hybrid skills.
  */
 
-export type StatKey = "strength" | "dexterity" | "intellect" | "mastery" | "initiative" | "stamina";
+/** Seven stats (design of 24.11.2026). `dexterity` is Ловкость. Mana is a resource, not a stat. */
+export type StatKey = "strength" | "dexterity" | "intellect" | "mastery" | "initiative" | "health" | "craft";
 export type Stats = Record<StatKey, number>;
 export type DamageType = "physical" | "magic";
 export type ArmorType = DamageType;
@@ -20,7 +21,8 @@ export const STAT_NAMES: Record<StatKey, string> = {
   intellect: "Интеллект",
   mastery: "Мастерство",
   initiative: "Инициатива",
-  stamina: "Стойкость",
+  health: "Здоровье",
+  craft: "Ремесло",
 };
 
 export type SkillEffect =
@@ -128,7 +130,7 @@ export const CLASSES: readonly GameClass[] = [
     icon: "⚔️",
     description: "Ближний бой, физическая броня и сила.",
     playable: true,
-    perRank: { strength: 3, stamina: 2 },
+    perRank: { strength: 3, health: 2 },
     armorPerRank: { physical: 12, magic: 2 },
     basic: basic("warrior_basic", "Удар оружием", "🗡️", "strength", "physical", 1),
     specs: [
@@ -203,7 +205,7 @@ export const CLASSES: readonly GameClass[] = [
     icon: "☯️",
     description: "Ловкий боец: свет, боевые искусства и лечение.",
     playable: true,
-    perRank: { dexterity: 2, intellect: 1, stamina: 2 },
+    perRank: { dexterity: 2, intellect: 1, health: 2 },
     armorPerRank: { physical: 6, magic: 6 },
     basic: basic("monk_basic", "Удар ладонью", "✋", "dexterity", "physical", 1),
     specs: [
@@ -296,9 +298,9 @@ export const TALENTS: readonly Talent[] = [
 export const TALENT_EVERY = 4;
 export const MAX_CLASSES = 3;
 export const MAX_CLASS_RANK = 5;
-/** Base number of skill slots; Мастерство adds one per MASTERY_PER_SLOT. */
+/** Base number of skill slots; the hero level adds one per LEVELS_PER_SLOT (placeholder). */
 export const BASE_SKILL_SLOTS = 4;
-export const MASTERY_PER_SLOT = 3;
+export const LEVELS_PER_SLOT = 5;
 export const MAX_SKILL_SLOTS = 8;
 
 const classById = new Map(CLASSES.map((c) => [c.id, c]));

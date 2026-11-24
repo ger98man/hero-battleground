@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { BASE_SKILL_SLOTS, CLASSES, HYBRIDS, MASTERY_PER_SLOT, MAX_CLASS_RANK, MAX_CLASSES, MAX_SKILL_SLOTS, STAT_NAMES, TALENT_EVERY, TALENTS } from "../game/classes.js";
+import { STAT_RULES, UNIT_ATTRIBUTE_NAMES } from "../game/stats.js";
+import { BASE_SKILL_SLOTS, CLASSES, HYBRIDS, LEVELS_PER_SLOT, MAX_CLASS_RANK, MAX_CLASSES, MAX_SKILL_SLOTS, STAT_NAMES, TALENT_EVERY, TALENTS } from "../game/classes.js";
 
 export const classesRouter = Router();
 
@@ -10,6 +11,8 @@ classesRouter.get("/", (_req, res) => {
     hybrids: HYBRIDS,
     talents: TALENTS,
     statNames: STAT_NAMES,
-    rules: { MAX_CLASSES, MAX_CLASS_RANK, BASE_SKILL_SLOTS, MASTERY_PER_SLOT, MAX_SKILL_SLOTS, TALENT_EVERY },
+    rules: { MAX_CLASSES, MAX_CLASS_RANK, BASE_SKILL_SLOTS, LEVELS_PER_SLOT, MAX_SKILL_SLOTS, TALENT_EVERY },
+    statRules: STAT_RULES,
+    unitAttributeNames: UNIT_ATTRIBUTE_NAMES,
   });
 });

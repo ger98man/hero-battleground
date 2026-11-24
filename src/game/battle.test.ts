@@ -86,6 +86,7 @@ test("damage hits armor of its type first, then HP", () => {
   const state = createBattle(fighter("A", MAGE, 1, 1), fighter("B", WARRIOR));
   const { player, bot } = state.units;
   applyPlayerAction(state, { type: "move", x: 4, y: 3 }, simpleBot, rng);
+  bot.armor.magic = { current: 200, max: 200 }; // enough armor to soak the whole hit
   const magic = bot.armor.magic.current;
   const phys = bot.armor.physical.current;
   const hp = bot.hp;
@@ -294,4 +295,30 @@ test("auto battle: the AI plays the player's hero and stacks until the battle en
   const pvp = createBattle(armyFighter("A", FactionId.Dawn), armyFighter("B", FactionId.Rot), seeded(9), "pvp");
   for (let i = 0; i < 600 && pvp.status === "active"; i++) applySideAction(pvp, pvp.turn, { type: "auto" }, seeded(i), simpleBot);
   assert.notEqual(pvp.status, "active");
+});
+
+test("attacker's Мастерство cancels the defender's dodge and parry", () => {
+  const state = createBattle(fighter("A", WARRIOR, 1, 1), fighter("B", WARRIOR));
+  const { player, bot } = state.units;
+  player.x = bot.x - 1;
+  player.y = bot.y;
+  bot.dodge = 0.2;
+  bot.parry = 0.2;
+  const rng = () => 0.1; // would be a dodge without Мастерство
+  player.mastery = 0;
+  const hp = bot.hp + bot.armor.physical.current;
+  applyPlayerAction(state, { type: "skill", skillId: "warrior_basic", x: bot.x, y: bot.y }, simpleBot, rng);
+  assert.equal(bot.hp + bot.armor.physical.current, hp, "dodged");
+  // Next own turn: with 20 Мастерство the 20% dodge and parry are gone.
+  const state2 = createBattle(fighter("A", WARRIOR, 1, 1), fighter("B", WARRIOR));
+  const a = state2.units.player;
+  const b = state2.units.bot;
+  a.x = b.x - 1;
+  a.y = b.y;
+  b.dodge = 0.2;
+  b.parry = 0.2;
+  a.mastery = 20;
+  const hp2 = b.hp + b.armor.physical.current;
+  applyPlayerAction(state2, { type: "skill", skillId: "warrior_basic", x: b.x, y: b.y }, simpleBot, rng);
+  assert.ok(b.hp + b.armor.physical.current < hp2, "hit lands");
 });

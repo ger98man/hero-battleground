@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hero Battleground — гильдии</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/social.css">
+</head>
+<body>
+<header class="topbar" id="topbar" data-page="guilds"></header>
+<main class="page">
+  <section class="panel">
+    <h2 class="panel-title">Гильдии</h2>
+    <p class="muted">Шесть гильдий — шесть направлений развития. Уровень гильдии растёт от очков за её занятия и даёт
+      характеристики, заклинания или доступ к новым возможностям. Сейчас очки дают бои с ботом (Союз Наёмников)
+      и PvP-бои (Арена), остальные гильдии появятся позже. Подробнее — в разделе <a href="/wiki/guilds">«Гильдии»</a>.</p>
+    <div class="guild-grid" id="guilds"><p class="muted">Загрузка…</p></div>
+    <div class="error" id="guild-error"></div>
+  </section>
+  <section class="chat-slot" id="chat-slot"></section>
+</main>
+<script src="/topbar.js"></script>
+<script src="/guilds.js"></script>
+<script src="/online.js"></script>
+<script src="/chat.js"></script>
+</body>
+</html>

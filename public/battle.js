@@ -314,7 +314,10 @@ function showResult() {
   $("again").classList.toggle("hidden", isPvp());
   $("result-title").textContent = won ? "Победа!" : "Поражение";
   const r = battle.rewards;
-  $("result-body").innerHTML = r ? `<p>Опыт героя: +${r.experience}${r.levelsGained ? ` · новый уровень героя!` : ""}</p>` : "";
+  $("result-body").innerHTML = r
+    ? `<p>Опыт героя: +${r.experience}${r.levelsGained ? ` · новый уровень героя!` : ""}</p>` +
+      (r.guild ? `<p>${esc(r.guild.name)}: +${r.guild.points} очк. гильдии${r.guild.levelsGained ? ` · новый уровень гильдии! <a href="/guilds">К гильдиям »</a>` : ""}</p>` : "")
+    : "";
   $("result").classList.remove("hidden");
 }
 

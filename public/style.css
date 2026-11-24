@@ -775,3 +775,17 @@ body:not(.battle-page) .services .service-btn {
   background: none; border: 0; border-bottom: 1px dashed var(--line); border-radius: 0; box-shadow: none; color: #7a2a14; text-decoration: underline; cursor: pointer;
 }
 .services .service-btn span { width: 24px; text-align: center; text-decoration: none; }
+
+/* ---------------------------------------------------------------- Guilds */
+.badge { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 9px; background: #b0412e; color: #fff; font-size: 12px; line-height: 18px; text-align: center; margin-left: 6px; }
+.guild-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.guild-card { background: var(--inset); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.guild-card h3 { margin: 0; display: flex; align-items: center; gap: 8px; }
+.guild-card .guild-icon { font-size: 24px; }
+.guild-card .guild-kind { font-size: 13px; color: var(--muted); }
+.guild-card .xp { margin: 4px 0; }
+.guild-card .status { font-size: 12px; font-weight: 700; }
+.guild-card.planned { opacity: .8; }
+.guild-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.stat-table { width: 100%; border-collapse: collapse; }
+.stat-table td, .stat-table th { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }

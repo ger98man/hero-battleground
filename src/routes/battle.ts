@@ -27,7 +27,8 @@ import { randomBuild, simpleBot } from "../game/bot.js";
 import { combatProfile } from "../game/build.js";
 import { defaultArmy, FACTIONS, type ArmyStack } from "../game/factions.js";
 import { postSystemMessage } from "../realtime/chat.js";
-import { getHeroByUser, grantHeroBattleResult, heroTitle, type HeroRow } from "../services/heroes.js";
+import { getHeroByUser, grantGuildPoints, grantHeroBattleResult, heroProfile, heroTitle, type HeroRow } from "../services/heroes.js";
+import { getGuild, GUILD_RULES, GuildId } from "../game/guilds.js";
 import {
   announcePvpResult,
   applyTimeout,
@@ -166,7 +167,7 @@ battleRouter.post("/", async (req, res) => {
     return;
   }
   const state = createBattle(
-    { name: hero.name, level: hero.level, army: hero.army, figure: figureOf(hero), profile: { ...combatProfile(hero.level, hero.build), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } },
+    { name: hero.name, level: hero.level, army: hero.army, figure: figureOf(hero), profile: { ...heroProfile(hero), className: heroTitle({ faction: hero.faction, factionHero: hero.faction_hero, build: hero.build }) } },
     {
       name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
       // The bot has the same level, a random legal build and the starting army of a random faction.
@@ -344,5 +345,8 @@ async function grantRewards(client: PoolClient, hero: HeroRow, state: BattleStat
   const won = state.status === "won";
   const experience = won ? 30 + 10 * state.units.bot.level : 10;
   const levelsGained = await grantHeroBattleResult(client, hero, won, experience);
-  return { experience, levelsGained };
+  // Until neutral armies exist, battles against the AI count for Союз Наёмников.
+  const points = won ? GUILD_RULES.winPoints : GUILD_RULES.lossPoints;
+  const guildLevels = await grantGuildPoints(client, hero, GuildId.Mercenaries, points);
+  return { experience, levelsGained, guild: { id: GuildId.Mercenaries, name: getGuild(GuildId.Mercenaries)!.name, points, levelsGained: guildLevels } };
 }

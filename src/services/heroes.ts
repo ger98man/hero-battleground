@@ -12,6 +12,7 @@ import {
   xpForNextLevel,
   type HeroBuild,
 } from "../game/build.js";
+import { addGuildPoints, GUILDS, guildStatBonus, parseGuilds, pendingPicks, pointsForNextGuildLevel, GUILD_RULES, type GuildId, type GuildProgress } from "../game/guilds.js";
 import { armyCost, factionHeroOf, heroClasses, leadership, MAX_ARMY_STACKS, parseArmy, type ArmyStack } from "../game/factions.js";
 
 /**
@@ -44,26 +45,36 @@ export interface HeroRow {
   faction: string | null;
   faction_hero: string | null;
   army: ArmyStack[];
+  guilds: GuildProgress[];
 }
+
+const GUILDS_JSON = `COALESCE((SELECT json_agg(json_build_object('guildId', g.guild_id, 'level', g.level, 'points', g.points, 'picks', g.picks))
+    FROM hero_guilds g WHERE g.hero_id = heroes.id), '[]'::json) AS guilds`;
+
+function toHero(hero: HeroRow | undefined): HeroRow | undefined {
+  return hero ? withHeroClasses({ ...hero, build: parseBuild(hero.build), army: parseArmy(hero.army), guilds: parseGuilds(hero.guilds) }) : undefined;
+}
+
+/** Battle profile of a hero: level, classes and guild bonuses. */
+export const heroProfile = (hero: Pick<HeroRow, "level" | "build" | "guilds">) =>
+  combatProfile(hero.level, hero.build, guildStatBonus(hero.guilds ?? []));
 
 export async function getHeroByUser(userId: number, db: Db = pool, forUpdate = false): Promise<HeroRow | undefined> {
   const { rows } = await db.query<HeroRow>(
-    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build, faction, faction_hero, army
+    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build, faction, faction_hero, army, ${GUILDS_JSON}
        FROM heroes WHERE user_id = $1 ${forUpdate ? "FOR UPDATE" : ""}`,
     [userId],
   );
-  const hero = rows[0];
-  return hero ? withHeroClasses({ ...hero, build: parseBuild(hero.build), army: parseArmy(hero.army) }) : undefined;
+  return toHero(rows[0]);
 }
 
 export async function getHeroById(heroId: number, db: Db = pool, forUpdate = false): Promise<HeroRow | undefined> {
   const { rows } = await db.query<HeroRow>(
-    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build, faction, faction_hero, army
+    `SELECT id::int, name, level, experience, wins, losses, bot_wins, bot_losses, build, faction, faction_hero, army, ${GUILDS_JSON}
        FROM heroes WHERE id = $1 ${forUpdate ? "FOR UPDATE" : ""}`,
     [heroId],
   );
-  const hero = rows[0];
-  return hero ? withHeroClasses({ ...hero, build: parseBuild(hero.build), army: parseArmy(hero.army) }) : undefined;
+  return toHero(rows[0]);
 }
 
 /** Everything the hero page shows: progress, build, derived stats, relic. */
@@ -71,7 +82,7 @@ export function heroView(row: HeroRow) {
   const hero = withHeroClasses(row);
   const b = hero.build;
   const hasClass = b.classes.length > 0;
-  const profile = hasClass ? combatProfile(hero.level, b) : null;
+  const profile = hasClass ? heroProfile(hero) : null;
   return {
     id: hero.id,
     name: hero.name,
@@ -98,6 +109,7 @@ export function heroView(row: HeroRow) {
     faction: hero.faction,
     factionHero: hero.faction_hero,
     army: hero.army,
+    guilds: guildsView(hero.guilds ?? []),
     armyLimits: { leadership: leadership(hero.level), used: armyCost(hero.army), maxStacks: MAX_ARMY_STACKS },
   };
 }
@@ -125,4 +137,31 @@ export async function grantHeroBattleResult(
     [hero.id, level, experience, won ? 1 : 0, won ? 0 : 1],
   );
   return gained;
+}
+
+/** Every guild with the hero's level and points in it. */
+export function guildsView(progress: GuildProgress[]) {
+  return GUILDS.map((def) => {
+    const g = progress.find((p) => p.guildId === def.id) ?? { guildId: def.id, level: 0, points: 0, picks: [] };
+    return {
+      id: def.id,
+      level: g.level,
+      points: g.points,
+      pointsToNext: g.level >= GUILD_RULES.maxLevel ? null : pointsForNextGuildLevel(g.level),
+      picks: g.picks,
+      pendingPicks: pendingPicks(g),
+    };
+  });
+}
+
+/** Adds guild points (creates the row on first points). Returns guild levels gained. */
+export async function grantGuildPoints(db: Db, hero: HeroRow, guildId: GuildId, points: number): Promise<number> {
+  const current = hero.guilds?.find((g) => g.guildId === guildId) ?? { level: 0, points: 0 };
+  const next = addGuildPoints(current, points);
+  await db.query(
+    `INSERT INTO hero_guilds (hero_id, guild_id, level, points) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (hero_id, guild_id) DO UPDATE SET level = EXCLUDED.level, points = EXCLUDED.points`,
+    [hero.id, guildId, next.level, next.points],
+  );
+  return next.gained;
 }

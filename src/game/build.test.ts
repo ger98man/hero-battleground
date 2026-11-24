@@ -42,21 +42,33 @@ test("hybrid name and skills come from the two highest-ranked classes", () => {
 test("stats, armor and slots derive from level and classes", () => {
   const w = heroStats(1, b([["warrior", 1, "warrior_shield"]]));
   assert.equal(w.strength, 13);
-  assert.equal(w.stamina, 12);
+  assert.equal(w.health, 12);
+  assert.equal(w.craft, 0);
   const mage3 = combatProfile(9, b([["mage", 4, "mage_fire"]]));
   assert.equal(mage3.stats.mastery, 8);
-  assert.equal(mage3.skillSlots, 6);
+  assert.ok(Math.abs(mage3.masteryVsDefense - 0.08) < 1e-9);
+  assert.equal(mage3.skillSlots, 5);
+  assert.equal(combatProfile(1, b([["mage", 1, "mage_fire"]])).skillSlots, 4);
   const shield = combatProfile(1, b([["warrior", 1, "warrior_shield"]]));
   const twohand = combatProfile(1, b([["warrior", 1, "warrior_twohand"]]));
   assert.ok(shield.physicalArmor > twohand.physicalArmor);
-  assert.ok(shield.speedBonus <= 0.15 && shield.dodge <= 0.2 && shield.parry <= 0.2);
+  assert.ok(shield.speedBonus <= 0.15 && shield.dodge <= 0.25 && shield.parry <= 0.25);
+  assert.equal(shield.maxHp, 40 + 6 * 12);
+  assert.ok(Math.abs(shield.unitDamage.strength - 1.03) < 1e-9);
+});
+
+test("guild bonuses add to stats", () => {
+  const p = combatProfile(1, b([["warrior", 1, "warrior_shield"]]), { initiative: 2, craft: 3, strength: 5 });
+  assert.equal(p.stats.initiative, 12);
+  assert.equal(p.stats.craft, 3);
+  assert.equal(p.stats.strength, 18);
+  assert.ok(Math.abs(p.parry - 0.08) < 1e-9);
 });
 
 test("loadout keeps only available skills within slots", () => {
   const build = b([["warrior", 1, "warrior_shield"]], [], ["warrior_bash", "warrior_execute", "nope"]);
-  const stats = heroStats(1, build);
-  assert.deepEqual(effectiveLoadout(build, stats), ["warrior_bash"]);
-  assert.ok(effectiveLoadout({ ...build, loadout: [] }, stats).length > 0);
+  assert.deepEqual(effectiveLoadout(build, 1), ["warrior_bash"]);
+  assert.ok(effectiveLoadout({ ...build, loadout: [] }, 1).length > 0);
 });
 
 test("every skill id is unique and random bot builds are legal", () => {
