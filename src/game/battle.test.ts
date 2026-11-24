@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  eventsSince,
+  recordEvents,
   applyPlayerAction,
   applySideAction,
   BattleError,
@@ -321,4 +323,17 @@ test("attacker's Мастерство cancels the defender's dodge and parry", (
   const hp2 = b.hp + b.armor.physical.current;
   applyPlayerAction(state2, { type: "skill", skillId: "warrior_basic", x: b.x, y: b.y }, simpleBot, rng);
   assert.ok(b.hp + b.armor.physical.current < hp2, "hit lands");
+});
+
+test("PvP event feed: numbered, replayable after a given number, trimmed to the recent ones", () => {
+  const state = { version: 2 } as unknown as BattleState;
+  assert.deepEqual(eventsSince(state, 0), []);
+  recordEvents(state, [{ type: "end", status: "won" }, { type: "stun", side: "bot" }]);
+  assert.equal(state.eventSeq, 2);
+  assert.deepEqual(eventsSince(state, 1), [{ type: "stun", side: "bot" }]);
+  assert.deepEqual(eventsSince(state, 2), []);
+  recordEvents(state, Array.from({ length: 400 }, () => ({ type: "stun", side: "player" }) as const));
+  assert.equal(state.eventSeq, 402);
+  assert.equal(eventsSince(state, 0), null);
+  assert.equal(eventsSince(state, 400)?.length, 2);
 });

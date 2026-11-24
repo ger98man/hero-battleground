@@ -128,6 +128,31 @@ export interface BattleState {
   round: number;
   status: BattleStatus;
   log: string[];
+  /** PvP: number of the last recorded event, so a client can replay the opponent's moves. */
+  eventSeq?: number;
+  /** PvP: the most recent events (numbered), oldest first. Not sent to clients as part of the state. */
+  feed?: { seq: number; event: BattleEvent }[];
+}
+
+/** How many recent events a PvP battle keeps for replay. */
+const FEED_SIZE = 300;
+
+/** PvP: numbers and stores events so the other player's screen can play them later. */
+export function recordEvents(state: BattleState, events: BattleEvent[]) {
+  if (!events.length) return;
+  const feed = state.feed ?? [];
+  let seq = state.eventSeq ?? 0;
+  for (const event of events) feed.push({ seq: ++seq, event });
+  state.eventSeq = seq;
+  state.feed = feed.slice(-FEED_SIZE);
+}
+
+/** PvP: events after `since`, or null when some of them are no longer kept (the client then just redraws). */
+export function eventsSince(state: BattleState, since: number): BattleEvent[] | null {
+  const feed = state.feed ?? [];
+  if (since >= (state.eventSeq ?? 0)) return [];
+  if (!feed.length || feed[0].seq > since + 1) return null;
+  return feed.filter((f) => f.seq > since).map((f) => f.event);
 }
 
 export type BattleEvent =
@@ -138,7 +163,8 @@ export type BattleEvent =
   | { type: "armor"; side: Side; armor: ArmorType; amount: number }
   | { type: "miss"; side: Side; reason: "dodge" | "parry" }
   | { type: "stun"; side: Side }
-  | { type: "reaction"; side: Side; name: string }
+  /** `id`: the stack that strikes back (counter-attack); missing = the hero of `side`. */
+  | { type: "reaction"; side: Side; name: string; id?: string }
   | { type: "turn"; side: Side; round: number; actor?: string }
   | { type: "stack-move"; side: Side; id: string; path: Cell[] }
   | { type: "stack-attack"; side: Side; id: string; target: Cell; ranged: boolean }
@@ -698,7 +724,7 @@ function strike(state: BattleState, attacker: Stack, target: StrikeTarget, rng: 
 function counterAttack(state: BattleState, defender: Stack, attacker: StrikeTarget, rng: Rng, events: BattleEvent[]) {
   if (state.status !== "active" || defender.count <= 0 || defender.retaliated) return;
   defender.retaliated = true;
-  events.push({ type: "reaction", side: defender.side, name: "Ответный удар" });
+  events.push({ type: "reaction", side: defender.side, name: "Ответный удар", id: defender.id });
   log(state, `«${defender.name}» наносит ответный удар.`);
   strike(state, defender, attacker, rng, events, `ответный удар «${defender.name}»`);
 }

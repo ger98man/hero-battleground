@@ -7,6 +7,8 @@ import {
   applySideAction,
   BattleError,
   createBattle,
+  eventsSince,
+  recordEvents,
   other,
   reachableCells,
   skillBlocker,
@@ -81,7 +83,8 @@ function eventsSeenBy(events: BattleEvent[], side: Side): BattleEvent[] {
 /** What the client needs to draw the battle screen, from the viewing hero's side. */
 function battleView(row: BattleRow, heroId: number) {
   const side = sideOf(row, heroId);
-  const s = asSeenBy(row.state, side);
+  const { feed: _feed, ...state } = row.state;
+  const s = asSeenBy(state, side);
   const rewards = row.mode === "pvp" ? ((row.rewards as PvpRewards | null)?.byHero[heroId] ?? null) : row.rewards;
   const player = s.units.player;
   const myTurn = s.status === "active" && s.turn === "player";
@@ -94,6 +97,8 @@ function battleView(row: BattleRow, heroId: number) {
     status: s.status,
     rewards,
     state: s,
+    /** PvP: number of the last event, to ask for the ones after it (`?since=`). */
+    eventSeq: row.state.eventSeq ?? 0,
     /** PvP: when the current turn ends automatically (ISO), and the server clock to correct for drift. */
     turnDeadline: row.turn_deadline ? row.turn_deadline.toISOString() : null,
     serverNow: new Date().toISOString(),
@@ -227,6 +232,14 @@ battleRouter.get("/:id", async (req, res) => {
     res.status(404).json({ error: "Бой не найден" });
     return;
   }
+  // PvP: `?since=N` also returns what happened after event N, so the screen can play the opponent's moves.
+  const since = Number(req.query.since);
+  if (Number.isInteger(since) && since >= 0) {
+    const events = eventsSince(rows[0].state, since);
+    const viewer = rows[0].viewer;
+    res.json({ battle: battleView(rows[0], viewer), events: events ? eventsSeenBy(events, sideOf(rows[0], viewer)) : null });
+    return;
+  }
   return sendBattle(res, rows[0], rows[0].viewer);
 });
 
@@ -321,7 +334,9 @@ async function pvpAction(client: PoolClient, res: Response, row: BattleRow, hero
   const timedOut = await applyTimeout(client, row, events);
   const actorBefore = `${row.state.turn}:${activeActor(row.state)}:${row.state.time}`;
   try {
-    events.push(...applySideAction(row.state, sideOf(row, heroId), action, Math.random, simpleBot));
+    const happened = applySideAction(row.state, sideOf(row, heroId), action, Math.random, simpleBot);
+    recordEvents(row.state, happened);
+    events.push(...happened);
   } catch (err) {
     if (!(err instanceof BattleError)) throw err;
     await client.query(timedOut ? "COMMIT" : "ROLLBACK");

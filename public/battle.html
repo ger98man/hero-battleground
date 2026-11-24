@@ -23,7 +23,7 @@
   </header>
 
   <div class="bf-mid">
-    <div class="board" id="board"><div class="grid" id="grid"></div></div>
+    <div class="board" id="board"><div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div><div class="fx" id="fx"></div></div></div>
     <aside class="bf-side" id="bf-side">
       <div class="side-tabs">
         <button type="button" data-pane="log" class="active">Журнал</button>
@@ -45,6 +45,7 @@
       <button type="button" id="end-turn" class="btn-end-turn"><span class="hourglass">⌛</span>Конец хода</button>
       <div class="end-row">
         <button type="button" class="small-btn" id="auto" aria-pressed="false" title="ИИ ходит за вашего героя и отряды, пока не выключите">⚙ Авто бой</button>
+        <button type="button" class="small-btn" id="speed" title="Скорость анимаций боя">▶ 1×</button>
         <button type="button" class="small-btn" id="side-toggle" title="Журнал и боевой чат">📜</button>
         <button type="button" class="small-btn" id="surrender" title="Сдаться">🏳</button>
       </div>

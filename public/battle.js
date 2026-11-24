@@ -12,13 +12,19 @@ let clockOffset = 0; // server clock minus local clock, for the PvP turn timer
 let factions = [];
 let auto = false;
 let autoTimer = null;
+let playing = false; // events are being played on the field; input waits
+let lastSeq = 0; // PvP: last event already shown
+
+const SPEED_KEY = "hb.battleSpeed";
+const SPEEDS = [1, 2, 0]; // 0 = no animations
+let speed = 1;
 
 const isPvp = () => battle?.mode === "pvp";
 const isHeroId = (id) => id === "player" || id === "bot";
 const stacks = () => (battle.state.stacks ?? []).filter((st) => st.count > 0);
 const stackById = (id) => (battle.state.stacks ?? []).find((st) => st.id === id);
 const activeStack = () => (isHeroId(battle.active) ? null : stackById(battle.active));
-const myTurn = () => battle.state.status === "active" && battle.state.turn === "player";
+const myTurn = () => !playing && battle.state.status === "active" && battle.state.turn === "player";
 
 // ---------- figures ----------
 const unitDefs = new Map();
@@ -109,7 +115,7 @@ function renderGrid() {
   for (const x of stacks()) bodies.set(`${x.x},${x.y}`, { side: x.side, hero: false, id: x.id, st: x });
   const grid = $("grid");
   grid.style.gridTemplateColumns = `repeat(${s.width}, 1fr)`;
-  grid.style.width = `min(100cqw, calc(100cqh * ${s.width / s.height}))`;
+  $("grid-wrap").style.width = `min(100cqw, calc(100cqh * ${s.width / s.height}))`;
   const cells = [];
   for (let y = 0; y < s.height; y++) {
     for (let x = 0; x < s.width; x++) {
@@ -165,6 +171,7 @@ function renderBottom() {
       : skill ? `«${skill.name}»: кликните по врагу (герою или отряду) в красной зоне. Esc — отмена.`
         : `${me.movesLeft ? "Синие клетки — куда пойти. " : ""}Умения 1–${battle.skills.length} бьют героя или отряды.`;
   }
+  if (playing) $("hint").textContent = "Идёт бой… Нажмите на поле, чтобы пропустить анимацию.";
   $("end-turn").disabled = !mine || busy || auto;
   $("surrender").disabled = s.status !== "active";
   $("auto").classList.toggle("on", auto);
@@ -189,28 +196,250 @@ function render() {
   scheduleAuto();
 }
 
-// ---------- floating numbers ----------
-function floatAt(x, y, text, cls) {
-  const cell = $("grid").querySelector(`[data-x="${x}"][data-y="${y}"]`);
-  if (!cell) return;
-  const el = document.createElement("div");
-  el.className = `float ${cls}`;
-  el.textContent = text;
-  cell.appendChild(el);
-  setTimeout(() => el.remove(), 1200);
-}
-const floatHero = (side, text, cls) => floatAt(battle.state.units[side].x, battle.state.units[side].y, text, cls);
+// ---------- battle animations ----------
+// The server answers an action with everything that happened (own action, auto battle, the
+// opponent's and bot's turns) as a list of events. They are played one by one on a copy of the
+// position drawn before, then the real new position is drawn.
+let skipping = false;
 
-function playEvents(events) {
-  for (const e of events) {
-    if (e.type === "damage") floatHero(e.side, e.amount ? `-${e.amount}` : `-${e.armor}${e.damageType === "magic" ? "🔷" : "🛡️"}`, e.amount ? "dmg" : "armor");
-    if (e.type === "heal" && e.amount) floatHero(e.side, `+${e.amount}`, "heal");
-    if (e.type === "armor") floatHero(e.side, `+${e.amount}${e.armor === "magic" ? "🔷" : "🛡️"}`, "heal");
-    if (e.type === "miss") floatHero(e.side, e.reason === "dodge" ? "уклон" : "парир.", "armor");
-    if (e.type === "stack-damage") {
-      const st = stackById(e.id);
-      if (st) floatAt(st.x, st.y, `-${e.amount}${e.killed ? ` †${e.killed}` : ""}`, "dmg");
+const sleep = (ms) => new Promise((r) => setTimeout(r, skipping || !speed ? 0 : ms / speed));
+const cellEl = (x, y) => $("grid").querySelector(`[data-x="${x}"][data-y="${y}"]`);
+
+/** Cell box inside the field, in px (the fx layer has the same origin as the cells). */
+function cellBox(x, y) {
+  const c = cellEl(x, y);
+  return c ? { left: c.offsetLeft, top: c.offsetTop, w: c.offsetWidth, h: c.offsetHeight } : null;
+}
+
+function fxEl(cls, html, x, y) {
+  const b = cellBox(x, y);
+  if (!b) return null;
+  const el = document.createElement("div");
+  el.className = `fx-el ${cls}`;
+  el.innerHTML = html;
+  Object.assign(el.style, { left: `${b.left}px`, top: `${b.top}px`, width: `${b.w}px`, height: `${b.h}px` });
+  $("fx").appendChild(el);
+  return el;
+}
+
+/** Floating text over a cell: damage, heal, "Уклонение"… Several at once stack upwards. */
+function floatAt(x, y, text, cls) {
+  if (skipping || !speed) return;
+  const busyHere = [...$("fx").querySelectorAll(".float")].filter((f) => f.dataset.at === `${x},${y}`).length;
+  const el = fxEl(`float ${cls}`, "", x, y);
+  if (!el) return;
+  el.textContent = text;
+  el.dataset.at = `${x},${y}`;
+  el.style.setProperty("--lift", `${busyHere * -22}px`);
+  el.style.animationDuration = `${1300 / speed}ms`;
+  setTimeout(() => el.remove(), 1300 / speed);
+}
+
+/** Plays a CSS animation class on a cell and waits for it. */
+async function cellAnim(x, y, cls, ms, vars = {}) {
+  const c = cellEl(x, y);
+  if (!c || skipping || !speed) return;
+  for (const [k, v] of Object.entries(vars)) c.style.setProperty(k, v);
+  c.style.setProperty("--dur", `${ms / speed}ms`);
+  c.classList.add(cls);
+  await sleep(ms);
+  c.classList.remove(cls);
+}
+
+/** Where an actor stands on the copy being played: hero side or stack id. */
+function posOf(s, id) {
+  if (isHeroId(id)) return [s.units[id].x, s.units[id].y];
+  const st = (s.stacks ?? []).find((x) => x.id === id);
+  return st ? [st.x, st.y] : null;
+}
+
+/** Walks a figure along its path cell by cell. */
+async function animateMove(s, id, path) {
+  const from = posOf(s, id);
+  const setPos = ([x, y]) => {
+    if (isHeroId(id)) Object.assign(s.units[id], { x, y });
+    else Object.assign(stackById(id), { x, y });
+  };
+  if (!from || !path.length || skipping || !speed) { if (path.length) setPos(path[path.length - 1]); renderGrid(); return; }
+  const src = cellEl(from[0], from[1]);
+  const ghost = fxEl(`ghost ${[...src.classList].filter((c) => ["player", "bot", "hero", "stack"].includes(c)).join(" ")}`, src.innerHTML, from[0], from[1]);
+  src.classList.add("vacant");
+  const step = 210;
+  ghost.style.transition = `left ${step / speed}ms linear, top ${step / speed}ms linear`;
+  for (const [x, y] of path) {
+    if (skipping) break;
+    const b = cellBox(x, y);
+    ghost.style.left = `${b.left}px`;
+    ghost.style.top = `${b.top}px`;
+    await sleep(step);
+  }
+  setPos(path[path.length - 1]);
+  renderGrid();
+  ghost.remove();
+}
+
+/** Melee: the attacker lunges towards the target. Ranged: a missile flies. */
+async function animateAttack(s, id, target, ranged, icon) {
+  const from = posOf(s, id);
+  if (!from) return;
+  if (!ranged) {
+    const b1 = cellBox(from[0], from[1]);
+    const b2 = cellBox(target[0], target[1]);
+    if (!b1 || !b2) return;
+    await cellAnim(from[0], from[1], "lunge", 320, { "--dx": `${(b2.left - b1.left) * 0.45}px`, "--dy": `${(b2.top - b1.top) * 0.45}px` });
+    return;
+  }
+  if (skipping || !speed) return;
+  const missile = fxEl("missile", icon ? `<span>${icon}</span>` : `<i></i>`, from[0], from[1]);
+  const b = cellBox(target[0], target[1]);
+  const b0 = cellBox(from[0], from[1]);
+  missile.style.setProperty("--angle", `${Math.atan2(b.top - b0.top, b.left - b0.left)}rad`);
+  const ms = 130 + 45 * dist(from[0], from[1], target[0], target[1]);
+  missile.style.transition = `left ${ms / speed}ms ease-in, top ${ms / speed}ms ease-in`;
+  missile.getBoundingClientRect(); // start the transition from the attacker
+  missile.style.left = `${b.left}px`;
+  missile.style.top = `${b.top}px`;
+  await sleep(ms);
+  missile.remove();
+}
+
+function skillInfo(side, skillId) {
+  const list = side === "player" ? battle.skills : battle.botSkills;
+  return list?.find((k) => k.id === skillId);
+}
+
+const redrawSides = () => { $("panel-player").innerHTML = sidePanel("player"); $("panel-bot").innerHTML = sidePanel("bot"); };
+
+/** Cell hit by the event (for a counter-blow: where it lands). */
+function hitCell(s, e) {
+  if (!e) return null;
+  if (e.type === "stack-damage") return posOf(s, e.id);
+  if (e.type === "damage" || e.type === "miss") return posOf(s, e.side);
+  return null;
+}
+
+async function playEvent(s, e, next) {
+  switch (e.type) {
+    case "turn": {
+      s.round = e.round;
+      s.turn = e.side;
+      battle.active = e.actor ?? e.side;
+      const i = battle.queue.findIndex((a) => a.id === battle.active);
+      if (i > 0) battle.queue = battle.queue.slice(i);
+      renderRound();
+      renderQueue();
+      renderGrid();
+      await sleep(250);
+      return;
     }
+    case "move":
+      return animateMove(s, e.side, e.path);
+    case "stack-move":
+      return animateMove(s, e.id, e.path);
+    case "stack-attack": {
+      const st = stackById(e.id);
+      if (st) floatAt(st.x, st.y, e.ranged ? "Выстрел" : "Атака", "label");
+      return animateAttack(s, e.id, e.target, e.ranged, null);
+    }
+    case "skill": {
+      const u = s.units[e.side];
+      const k = skillInfo(e.side, e.skillId);
+      floatAt(u.x, u.y, k?.name ?? "Умение", "label");
+      if (e.target[0] === u.x && e.target[1] === u.y) return cellAnim(u.x, u.y, "cast", 450);
+      const far = dist(u.x, u.y, e.target[0], e.target[1]) > 1;
+      return animateAttack(s, e.side, e.target, far, k?.icon ?? "✦");
+    }
+    case "reaction": {
+      const at = posOf(s, e.id ?? e.side);
+      if (at) floatAt(at[0], at[1], `↩ ${e.name}`, "label");
+      await sleep(250);
+      // The counter-blow: a lunge towards whoever the next event hits.
+      const to = hitCell(s, next);
+      if (at && to) await animateAttack(s, e.id ?? e.side, to, false);
+      return;
+    }
+    case "damage": {
+      const u = s.units[e.side];
+      const armor = u.armor[e.damageType === "magic" ? "magic" : "physical"];
+      armor.current = Math.max(0, armor.current - e.armor);
+      u.hp = Math.max(0, u.hp - e.amount);
+      floatAt(u.x, u.y, e.amount ? `-${e.amount}` : `-${e.armor}${e.damageType === "magic" ? "🔷" : "🛡️"}`, e.amount ? "dmg" : "armor");
+      if (e.amount && e.armor) floatAt(u.x, u.y, `-${e.armor}${e.damageType === "magic" ? "🔷" : "🛡️"}`, "armor");
+      redrawSides();
+      await cellAnim(u.x, u.y, e.amount ? "hit" : "hit-armor", 380);
+      if (u.hp <= 0) await cellAnim(u.x, u.y, "dying", 700);
+      return;
+    }
+    case "heal": {
+      const u = s.units[e.side];
+      if (!e.amount) return;
+      u.hp = Math.min(u.maxHp, u.hp + e.amount);
+      floatAt(u.x, u.y, `+${e.amount}`, "heal");
+      redrawSides();
+      return cellAnim(u.x, u.y, "healed", 400);
+    }
+    case "armor": {
+      const u = s.units[e.side];
+      const a = u.armor[e.armor];
+      if (a) a.current = Math.min(a.max, a.current + e.amount);
+      floatAt(u.x, u.y, `+${e.amount}${e.armor === "magic" ? "🔷" : "🛡️"}`, "heal");
+      redrawSides();
+      return sleep(250);
+    }
+    case "miss": {
+      const u = s.units[e.side];
+      if (e.reason === "dodge") {
+        floatAt(u.x, u.y, "Уклонение", "miss");
+        return cellAnim(u.x, u.y, "dodge", 420);
+      }
+      floatAt(u.x, u.y, "Парирование", "miss");
+      return cellAnim(u.x, u.y, "parry", 420);
+    }
+    case "stun": {
+      const u = s.units[e.side];
+      u.stunned = Math.max(1, u.stunned);
+      floatAt(u.x, u.y, "💫 Оглушение", "label");
+      redrawSides();
+      return sleep(300);
+    }
+    case "stack-damage": {
+      const st = stackById(e.id);
+      if (!st) return;
+      floatAt(st.x, st.y, `-${e.amount}`, "dmg");
+      if (e.killed) floatAt(st.x, st.y, `† ${e.killed}`, "killed");
+      const left = Math.max(0, st.count - e.killed);
+      await cellAnim(st.x, st.y, "hit", 380);
+      if (left <= 0) await cellAnim(st.x, st.y, "dying", 700);
+      st.count = left;
+      renderGrid();
+      redrawSides();
+      return;
+    }
+    default:
+      return;
+  }
+}
+
+/**
+ * Plays `events` starting from the position of `from` (the battle drawn now). Afterwards the
+ * caller draws the new battle. Input waits while it runs; a tap on the field skips the rest.
+ */
+async function playEvents(from, events) {
+  if (!events?.length || !speed || document.hidden) return;
+  const copy = JSON.parse(JSON.stringify(from));
+  battle = { ...copy, reachable: [], targets: [], visible: [] };
+  selectedSkill = null;
+  playing = true;
+  skipping = false;
+  try {
+    render();
+    for (let i = 0; i < events.length && !skipping; i++) await playEvent(battle.state, events[i], events[i + 1]);
+  } catch (err) {
+    console.error("battle animation failed", err);
+  } finally {
+    playing = false;
+    skipping = false;
+    $("fx").innerHTML = "";
   }
 }
 
@@ -219,20 +448,32 @@ async function act(action) {
   busy = true;
   $("error").textContent = "";
   try {
+    const before = battle;
     const data = await api(`/api/battle/${battle.id}/action`, action);
-    setBattle(data.battle);
     selectedSkill = null;
+    await playEvents(before, data.events);
+    setBattle(data.battle);
+    lastSeq = data.battle.eventSeq ?? lastSeq;
     render();
-    playEvents(data.events);
   } catch (err) {
     $("error").textContent = err.message;
-    if (isPvp()) refresh();
+    if (isPvp()) refreshAgain = true;
   } finally {
     busy = false;
-    $("end-turn").disabled = !(myTurn() && !auto);
-    scheduleAuto();
+    if (battle) renderBottom();
+    if (refreshAgain) { refreshAgain = false; refresh(); }
+    else scheduleAuto();
   }
 }
+
+function setSpeed(v) {
+  speed = v;
+  try { localStorage.setItem(SPEED_KEY, String(v)); } catch {}
+  $("speed").textContent = v ? `▶ ${v}×` : "⏭ Без анимаций";
+  $("speed").classList.toggle("on", v !== 1);
+}
+$("speed").onclick = () => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]);
+try { const v = Number(localStorage.getItem(SPEED_KEY) ?? 1); setSpeed(SPEEDS.includes(v) ? v : 1); } catch { setSpeed(1); }
 
 // ---------- auto battle ----------
 function setAuto(on) {
@@ -269,6 +510,7 @@ $("skillbar").onclick = (e) => {
 };
 
 $("grid").onclick = (e) => {
+  if (playing) { skipping = true; return; }
   const cell = e.target.closest(".cell");
   if (!cell || !battle || !myTurn() || auto) return;
   const x = Number(cell.dataset.x);
@@ -326,6 +568,7 @@ $("again").onclick = async () => {
   try {
     const data = await api("/api/battle", {});
     setBattle(data.battle);
+    lastSeq = data.battle.eventSeq ?? 0;
     $("result").classList.add("hidden");
     render();
   } catch (err) {
@@ -344,21 +587,35 @@ $("again").onclick = async () => {
   for (const f of factions) for (const t of f.tiers) for (const u of t.units) unitDefs.set(u.id, { unit: u, faction: f });
   if (!data.battle) return location.assign("/hero");
   setBattle(data.battle);
+  lastSeq = data.battle.eventSeq ?? 0;
   render();
 })();
 
 // PvP: the opponent's moves arrive as "battle" events over the chat socket; polling is the fallback.
 let refreshing = false;
+let refreshAgain = false;
 async function refresh() {
-  if (!battle || !isPvp() || refreshing) return;
+  if (!battle || !isPvp()) return;
+  // An own action or a replay is running: look again right after it.
+  if (refreshing || busy) { refreshAgain = true; return; }
   refreshing = true;
+  busy = true;
   try {
-    const data = await api(`/api/battle/${battle.id}`);
+    const data = await api(`/api/battle/${battle.id}?since=${lastSeq}`);
     const before = JSON.stringify(battle.state);
-    setBattle(data.battle);
-    if (JSON.stringify(battle.state) !== before) render();
+    if (JSON.stringify(data.battle.state) !== before) {
+      // The opponent's moves are played in order before the new position is drawn.
+      if (data.events?.length) await playEvents(battle, data.events);
+      setBattle(data.battle);
+      render();
+    } else setBattle(data.battle);
+    lastSeq = data.battle.eventSeq ?? lastSeq;
   } catch {} finally {
     refreshing = false;
+    busy = false;
+    if (battle) renderBottom();
+    if (refreshAgain) { refreshAgain = false; refresh(); }
+    else scheduleAuto();
   }
 }
 

@@ -7,7 +7,7 @@ import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { parseBuild } from "../game/build.js";
 import { getGuild, GUILD_RULES, GuildId } from "../game/guilds.js";
-import { createBattle, other, timeoutTurn, type BattleEvent, type BattleState, type Side } from "../game/battle.js";
+import { createBattle, other, recordEvents, timeoutTurn, type BattleEvent, type BattleState, type Side } from "../game/battle.js";
 import { broadcastEvent, postSystemMessage, sendToUser } from "../realtime/chat.js";
 import {
   getHeroById,
@@ -316,7 +316,9 @@ export function announcePvpResult(row: BattleRow) {
 export async function applyTimeout(client: PoolClient, row: BattleRow, events: BattleEvent[] = []): Promise<boolean> {
   if (row.mode !== "pvp" || row.state.status !== "active" || !row.turn_deadline) return false;
   if (row.turn_deadline.getTime() > Date.now()) return false;
-  events.push(...timeoutTurn(row.state));
+  const happened = timeoutTurn(row.state);
+  recordEvents(row.state, happened);
+  events.push(...happened);
   // The next turn always gets the full time, even if the server was asleep for a while.
   await savePvp(client, row, true);
   return true;
