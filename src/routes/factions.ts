@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { FACTIONS, leadership, MAX_ARMY_STACKS, TIER_UNLOCK_LEVEL } from "../game/factions.js";
+import { FACTIONS, leadership, UNIT_TAGS, MAX_ARMY_STACKS, TIER_UNLOCK_LEVEL } from "../game/factions.js";
 
 export const factionsRouter = Router();
 
@@ -7,6 +7,7 @@ export const factionsRouter = Router();
 factionsRouter.get("/", (_req, res) => {
   res.json({
     factions: FACTIONS,
+    tags: UNIT_TAGS,
     rules: { MAX_ARMY_STACKS, TIER_UNLOCK_LEVEL, leadershipByLevel: Array.from({ length: 30 }, (_, i) => leadership(i + 1)) },
   });
 });

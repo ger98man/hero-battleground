@@ -802,3 +802,74 @@ body:not(.battle-page) .services .service-btn {
 .stat-tip ul { margin: 6px 0; padding-left: 18px; }
 .stat-tip .tip-note { font-size: 11px; font-style: italic; margin-top: 4px; }
 @media (max-width: 900px) { .stat-tip { right: auto; left: 0; top: 100%; width: min(360px, 90vw); } }
+
+/* ---------------------------------------------------------------- Army screen 0.12: tags, hero bonus, labelled stats */
+.float-tip { position: absolute; z-index: 60; max-width: 300px; padding: 8px 11px; background: #fffaf0; color: #2c2216; border: 1px solid #b89a5e;
+  border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); font-size: 13px; line-height: 1.4; pointer-events: none; }
+[data-tip] { cursor: help; }
+.small { font-size: 12px; }
+.army-hero { align-items: flex-start; }
+.army-hero .token.big { width: 104px; height: 104px; }
+.army-hero-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hero-bonus { margin-top: 4px; padding: 8px 10px; border: 1px solid #d9b25a; border-radius: var(--radius);
+  background: linear-gradient(180deg, #fff4cf, #f6e3a8); box-shadow: inset 0 0 0 1px #fffaf0; }
+.hero-bonus.inactive { background: var(--inset); border-color: var(--line); }
+.hero-bonus-title { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 14px; }
+.hero-bonus-title b { font-family: var(--font-body); font-size: 15px; color: #7a2b1e; }
+.hero-bonus-who { font-size: 13px; margin-top: 4px; }
+.unit-link { padding: 0; font-size: 13px; }
+.unit-link small { color: var(--muted); }
+
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 10px; font-size: 12px; line-height: 18px;
+  font-family: var(--font-body); font-weight: 700; color: #fff; background: var(--tc, #7a6a52); border: 1px solid rgba(0, 0, 0, .25); white-space: nowrap; }
+button.tag { cursor: pointer; text-decoration: none; box-shadow: none; }
+.tag-infantry { --tc: #8a5a36; }
+.tag-shooter { --tc: #4f7a2e; }
+.tag-caster { --tc: #3e5aa8; }
+.tag-flyer { --tc: #2f8a9a; }
+.tag-siege { --tc: #6a5a4a; }
+.tag-rider { --tc: #9a6a1e; }
+.tag-beast { --tc: #a0522d; }
+.tag-shaman { --tc: #7a3e9a; }
+.tag-undead { --tc: #4a5a4a; }
+.tag-treant { --tc: #2f7a4a; }
+.tag-all { --tc: #8a7a5a; }
+.tag.tag-bonus { box-shadow: 0 0 0 2px #f2c94c, 0 0 8px rgba(242, 201, 76, .8); }
+.roster-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 12px; }
+.roster-filter .tag { opacity: .7; padding: 3px 11px; font-size: 13px; }
+.roster-filter .tag.active, .roster-filter .tag:hover { opacity: 1; }
+body:not(.battle-page) .roster-filter button.tag { color: #fff; border: 1px solid rgba(0, 0, 0, .25); }
+body:not(.battle-page) .roster-filter button.tag { background: var(--tc, #8a7a5a); text-shadow: none; }
+
+.unit-card { position: relative; transition: opacity .2s, box-shadow .2s; }
+.unit-card.dim { opacity: .35; }
+.unit-card.boosted { border-color: #d9a520; box-shadow: 0 0 0 1px #f2c94c, 0 0 14px rgba(242, 190, 60, .55); }
+.unit-card.flash { animation: unit-flash 1.2s ease-out; }
+@keyframes unit-flash { 0% { box-shadow: 0 0 0 3px #f2c94c, 0 0 24px #f2c94c; } 100% { box-shadow: none; } }
+.bonus-ribbon { position: absolute; right: 8px; top: -9px; padding: 0 8px; font-size: 11.5px; font-weight: 700; line-height: 18px;
+  color: #4a2f0e; background: linear-gradient(180deg, #ffe08a, #e5b440); border: 1px solid #a9864a; border-radius: 9px; }
+.unit-art { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.unit-art .token.big { width: 104px; height: 104px; }
+.unit-name { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.in-army-mark { font-size: 12px; color: var(--green); font-weight: 700; }
+.unit-desc { font-size: 13px; color: var(--muted); font-style: italic; }
+.unit-cost { font-size: 13px; font-weight: 700; }
+.unit-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin: 2px 0; }
+.ustat { display: flex; flex-direction: column; align-items: center; padding: 3px 2px; border: 1px solid var(--line); border-radius: 5px;
+  background: rgba(255, 255, 255, .45); min-width: 0; }
+.ustat .stat-icon { font-size: 14px; line-height: 1.1; }
+.ustat .stat-val { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.ustat .stat-val small { color: var(--green); font-size: 11px; margin-left: 2px; }
+.ustat .stat-name { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ustat.up { border-color: #d9a520; background: #fff4cf; }
+.unit-attr { font-size: 12px; color: var(--muted); }
+.slot { cursor: pointer; }
+.slot.boosted { border-color: #d9a520; box-shadow: 0 0 0 1px #f2c94c, 0 0 10px rgba(242, 190, 60, .6); }
+.slot-star { position: absolute; right: 4px; top: 1px; color: #ffd257; font-size: 15px; text-shadow: 0 0 3px #000; }
+.slot-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 3px 2px; font-size: 11px; color: #fff; text-align: left;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .75)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 26px; }
+.slot.empty { display: flex; align-items: center; justify-content: center; }
+.slot.empty span { font-size: 12px; color: var(--muted); font-style: italic; }
+@media (max-width: 640px) { .unit-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .unit-art .token.big { width: 120px; height: 120px; } .unit-card .unit-name { justify-content: center; } }

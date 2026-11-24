@@ -69,3 +69,20 @@ test("faction heroes replace classes: their class lines are playable and legal a
   assert.deepEqual(heroClasses({ hero: paladin, level: 6 }).map((c) => c.rank), [2, 1]);
   assert.deepEqual(heroClasses({ hero: paladin, level: 12 }).map((c) => c.rank), [4, 1]);
 });
+
+test("unit tags: every unit has a tag, every hero bonus names units that exist in its faction", async () => {
+  const { UnitTag, bonusApplies, getUnit } = await import("./factions.js");
+  for (const f of FACTIONS) {
+    const units = f.tiers.flatMap((t) => t.units);
+    for (const u of units) assert.ok(u.tags.length > 0, u.name);
+    for (const h of f.heroes) {
+      if (!h.bonus.effect || h.bonus.enemies || h.bonus.tags.length === 0) continue;
+      assert.ok(units.some((u) => bonusApplies(h.bonus, u)), `${h.name}: «${h.armyBonus}» без подходящих войск`);
+    }
+  }
+  const shamans = FACTIONS.find((f) => f.id === FactionId.Ash)!.tiers.flatMap((t) => t.units).filter((u) => u.tags.includes(UnitTag.Shaman)).map((u) => u.id);
+  assert.deepEqual(shamans, ["ash_witchdoctor", "ash_totemist", "ash_ogremage"]);
+  assert.ok(getUnit("rot_skeleton")!.tags.includes(UnitTag.Undead));
+  assert.ok(getUnit("dawn_knight")!.tags.includes(UnitTag.Rider));
+  assert.ok(!getUnit("dawn_knight")!.tags.includes(UnitTag.Infantry));
+});

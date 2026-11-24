@@ -337,3 +337,20 @@ test("PvP event feed: numbered, replayable after a given number, trimmed to the 
   assert.equal(eventsSince(state, 0), null);
   assert.equal(eventsSince(state, 400)?.length, 2);
 });
+
+test("hero army bonus: +15% shaman damage only on shamans, enemy defense bonus on the other side", () => {
+  const ash = (figure?: string): Fighter => ({
+    ...fighter("P", WARRIOR, 5),
+    army: [{ unitId: "ash_raider", count: 10 }, { unitId: "ash_witchdoctor", count: 5 }],
+    figure: figure ? { faction: "ash", hero: figure } : undefined,
+  });
+  const plain = createBattle(ash(), ash(), seeded(1));
+  const shaman = createBattle(ash("ash_shaman"), ash("rot_lich"), seeded(1));
+  const find = (s: BattleState, side: string, unitId: string) => s.stacks.find((x) => x.side === side && x.unitId === unitId)!;
+  assert.ok(Math.abs(find(shaman, "player", "ash_witchdoctor").damageMult! - find(plain, "player", "ash_witchdoctor").damageMult! * 1.15) < 1e-9);
+  assert.equal(find(shaman, "player", "ash_raider").damageMult, find(plain, "player", "ash_raider").damageMult);
+  // "rot_lich" is not an Ash hero, so the bot's figure gives no bonus; check the enemy rule directly instead.
+  const lich = createBattle(ash(), { ...ash(), figure: { faction: "rot", hero: "rot_lich" } }, seeded(1));
+  assert.equal(find(lich, "player", "ash_raider").defense, find(plain, "player", "ash_raider").defense - 1);
+  assert.equal(find(lich, "bot", "ash_raider").defense, find(plain, "bot", "ash_raider").defense);
+});

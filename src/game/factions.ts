@@ -23,6 +23,37 @@ export enum UnitRole {
   Siege = "siege",
 }
 
+/**
+ * Unit tags: what kind of creature it is. Hero army bonuses name the tags they boost
+ * ("+15% урона шаманов" → Shaman), and the army screen shows them on every unit card.
+ */
+export enum UnitTag {
+  Infantry = "infantry",
+  Shooter = "shooter",
+  Caster = "caster",
+  Flyer = "flyer",
+  Siege = "siege",
+  Rider = "rider",
+  Beast = "beast",
+  Shaman = "shaman",
+  Undead = "undead",
+  Treant = "treant",
+}
+
+/** Player-facing tag names: `name` for the chip, `many` for bonus texts, `hint` for the tooltip. */
+export const UNIT_TAGS: Record<UnitTag, { name: string; many: string; hint: string }> = {
+  [UnitTag.Infantry]: { name: "Пехота", many: "пехота", hint: "Пеший боец ближнего боя: идёт к врагу и бьёт вплотную." },
+  [UnitTag.Shooter]: { name: "Стрелок", many: "стрелки", hint: "Бьёт издалека и не получает ответного удара." },
+  [UnitTag.Caster]: { name: "Заклинатель", many: "заклинатели", hint: "Магический отряд, урон растёт от Интеллекта героя." },
+  [UnitTag.Flyer]: { name: "Летает", many: "летающие", hint: "Перелетает через препятствия и других существ." },
+  [UnitTag.Siege]: { name: "Осадное", many: "осадные орудия", hint: "Медленное орудие, бьёт издалека." },
+  [UnitTag.Rider]: { name: "Всадник", many: "всадники", hint: "Боец верхом: на коне, волке, вепре или гиппогрифе." },
+  [UnitTag.Beast]: { name: "Зверь", many: "звери", hint: "Животное или чудище: волки, пантеры, грифоны, драконы, а также их наездники." },
+  [UnitTag.Shaman]: { name: "Шаман", many: "шаманы", hint: "Колдуны кланов: знахари, тотемщики и огры-чародеи." },
+  [UnitTag.Undead]: { name: "Нежить", many: "нежить", hint: "Мёртвые, поднятые магией. Все войска Ковена Тлена." },
+  [UnitTag.Treant]: { name: "Древень", many: "древни", hint: "Живые деревья Лесного Круга." },
+};
+
 export enum ModelBody {
   Soldier = "soldier",
   Knight = "knight",
@@ -48,6 +79,12 @@ export enum ModelWeapon {
   Hammer = "hammer",
   Scythe = "scythe",
   Claws = "claws",
+  /** Sling with a stone swung overhead. */
+  Sling = "sling",
+  /** Carved totem pole. */
+  Totem = "totem",
+  /** An axe in each hand (thrower). */
+  TwinAxes = "twin_axes",
 }
 
 export enum ModelHead {
@@ -78,6 +115,8 @@ export type UnitDef = {
   name: string;
   tier: number;
   role: UnitRole;
+  /** What kind of creature it is (see UNIT_TAGS); hero bonuses work on these. */
+  tags: UnitTag[];
   description: string;
   hp: number;
   attack: number;
@@ -103,10 +142,21 @@ export type FactionHero = {
   title: string;
   description: string;
   relic: { name: string; description: string };
-  /** Bonus to the army, shown on the hero card (not used in battle yet). */
+  /** Bonus to the army as shown to the player. */
   armyBonus: string;
+  /** Which units the bonus works on and what it changes in battle (see `bonusApplies`). */
+  bonus: ArmyBonusRule;
   model: ModelSpec;
 };
+
+/** A stat change a hero bonus makes; `hp` and `damage` are fractions (0.15 = +15%). */
+export type BonusEffect = { stat: "attack" | "defense" | "speed" | "hp" | "damage"; value: number };
+
+/**
+ * What a hero's army bonus works on: own units with any of `tags` (empty = the whole army),
+ * or every enemy stack when `enemies` is set. Without `effect` the bonus does not work in battle yet.
+ */
+export type ArmyBonusRule = { tags: UnitTag[]; enemies?: boolean; effect?: BonusEffect };
 
 export type FactionTier = { tier: number; unlockLevel: number; units: [UnitDef, UnitDef] };
 
@@ -140,6 +190,8 @@ type UnitInput = {
   role: UnitRole;
   description: string;
   model: ModelSpec;
+  /** Tags on top of the ones that follow from role and body (e.g. Shaman). */
+  tags?: UnitTag[];
   /** Small per-unit tweaks to the tier baseline. */
   hp?: number;
   attack?: number;
@@ -165,7 +217,32 @@ const ROLE_ATTRIBUTE: Record<UnitRole, UnitAttribute> = {
   [UnitRole.Caster]: "intellect",
 };
 
-function unit(tier: number, input: UnitInput): UnitDef {
+/** Tags from role and body, plus the unit's own extra tags; Ковен Тлена is all undead. */
+function unitTags(faction: FactionId, input: UnitInput): UnitTag[] {
+  const { body, weapon } = input.model;
+  const tags: UnitTag[] = [];
+  const animal = body === ModelBody.Beast || body === ModelBody.Dragon || (body === ModelBody.Flyer && weapon !== ModelWeapon.Spear);
+  switch (input.role) {
+    case UnitRole.Melee:
+      if (body === ModelBody.Rider) tags.push(UnitTag.Rider);
+      else if (body === ModelBody.Tree) tags.push(UnitTag.Treant);
+      else if (!animal) tags.push(UnitTag.Infantry);
+      break;
+    case UnitRole.Ranged: tags.push(UnitTag.Shooter); break;
+    case UnitRole.Caster: tags.push(UnitTag.Caster); break;
+    case UnitRole.Siege: tags.push(UnitTag.Siege); if (body === ModelBody.Tree) tags.push(UnitTag.Treant); break;
+    case UnitRole.Flyer:
+      tags.push(UnitTag.Flyer);
+      if (body === ModelBody.Flyer && weapon === ModelWeapon.Spear) tags.push(UnitTag.Rider, UnitTag.Beast);
+      break;
+  }
+  if (animal) tags.push(UnitTag.Beast);
+  if (faction === FactionId.Rot) tags.push(UnitTag.Undead);
+  for (const t of input.tags ?? []) if (!tags.includes(t)) tags.push(t);
+  return tags;
+}
+
+function unit(faction: FactionId, tier: number, input: UnitInput): UnitDef {
   const i = tier - 1;
   const hp = Math.round(TIER_HP[i] * (input.hp ?? 1));
   return {
@@ -173,6 +250,7 @@ function unit(tier: number, input: UnitInput): UnitDef {
     name: input.name,
     tier,
     role: input.role,
+    tags: unitTags(faction, input),
     description: input.description,
     hp,
     attack: TIER_ATTACK[i] + (input.attack ?? 0),
@@ -186,14 +264,15 @@ function unit(tier: number, input: UnitInput): UnitDef {
   };
 }
 
-function tiers(pairs: [UnitInput, UnitInput][]): FactionTier[] {
-  return pairs.map(([a, b], i) => ({ tier: i + 1, unlockLevel: TIER_UNLOCK_LEVEL[i], units: [unit(i + 1, a), unit(i + 1, b)] }));
+function tiers(faction: FactionId, pairs: [UnitInput, UnitInput][]): FactionTier[] {
+  return pairs.map(([a, b], i) => ({ tier: i + 1, unlockLevel: TIER_UNLOCK_LEVEL[i], units: [unit(faction, i + 1, a), unit(faction, i + 1, b)] }));
 }
 
 const M = ModelBody;
 const W = ModelWeapon;
 const H = ModelHead;
 const R = UnitRole;
+const T = UnitTag;
 
 export const FACTIONS: readonly Faction[] = [
   {
@@ -205,19 +284,19 @@ export const FACTIONS: readonly Faction[] = [
     accent: "#e8c66a",
     heroes: [
       { id: "dawn_paladin", classes: [{ id: "warrior", spec: "warrior_shield" }, { id: "monk", spec: "monk_light" }], name: "Паладин", title: "Щит ордена", description: "Ведёт рыцарей в первом ряду, лечит и защищает войска.",
-        relic: { name: "Клинок Зари", description: "Удары героя накладывают Световую метку." }, armyBonus: "+2 к защите пехоты",
+        relic: { name: "Клинок Зари", description: "Удары героя накладывают Световую метку." }, armyBonus: "+2 к защите пехоты", bonus: { tags: [T.Infantry], effect: { stat: "defense", value: 2 } },
         model: { body: M.Knight, weapon: W.Sword, head: H.Helm, shield: true, cape: true, tint: "#c9ced8" } },
       { id: "dawn_archmage", classes: [{ id: "mage", spec: "mage_fire" }], name: "Архимаг", title: "Хранитель башни", description: "Сильнейший заклинатель ордена, усиливает магов.",
-        relic: { name: "Посох Семи Звёзд", description: "Заклинания стоят меньше маны." }, armyBonus: "+20% урона заклинателей",
+        relic: { name: "Посох Семи Звёзд", description: "Заклинания стоят меньше маны." }, armyBonus: "+20% урона заклинателей", bonus: { tags: [T.Caster], effect: { stat: "damage", value: 0.2 } },
         model: { body: M.Robed, weapon: W.Staff, head: H.Hood, cape: true, tint: "#3b62b8" } },
       { id: "dawn_marshal", classes: [{ id: "warrior", spec: "warrior_dual" }], name: "Маршал", title: "Командир стрелков", description: "Мастер строя и залпов, ведёт арбалетчиков.",
-        relic: { name: "Знамя Первого Полка", description: "Стрелки получают +1 к инициативе." }, armyBonus: "+1 к атаке стрелков",
+        relic: { name: "Знамя Первого Полка", description: "Стрелки получают +1 к инициативе." }, armyBonus: "+1 к атаке стрелков", bonus: { tags: [T.Shooter], effect: { stat: "attack", value: 1 } },
         model: { body: M.Soldier, weapon: W.Crossbow, head: H.Feather, cape: true, tint: "#8a6a3c" } },
       { id: "dawn_inquisitor", classes: [{ id: "monk", spec: "monk_light" }, { id: "warrior", spec: "warrior_twohand" }], name: "Инквизитор", title: "Карающая длань", description: "Охотник на нечисть, ослабляет вражескую магию.",
-        relic: { name: "Печать Очищения", description: "Снимает с войск вражеские проклятия." }, armyBonus: "+10% к сопротивлению магии",
+        relic: { name: "Печать Очищения", description: "Снимает с войск вражеские проклятия." }, armyBonus: "+10% к сопротивлению магии", bonus: { tags: [] },
         model: { body: M.Soldier, weapon: W.Hammer, head: H.Hood, cape: true, tint: "#7a2b25" } },
     ],
-    tiers: tiers([
+    tiers: tiers(FactionId.Dawn, [
       [{ id: "dawn_militia", name: "Ополченец", role: R.Melee, description: "Дешёвая пехота с копьём.", model: { body: M.Soldier, weapon: W.Spear, head: H.Helm, tint: "#9aa1ad" } },
        { id: "dawn_halberdier", name: "Алебардщик", role: R.Melee, description: "Медленнее, но крепче, держит строй.", defense: 2, speed: -1, model: { body: M.Soldier, weapon: W.Axe, head: H.Helm, shield: true, tint: "#b8bec9" } }],
       [{ id: "dawn_crossbow", name: "Арбалетчик", role: R.Ranged, description: "Стреляет издалека, бьёт сквозь броню.", model: { body: M.Soldier, weapon: W.Crossbow, head: H.Helm, tint: "#8a6a3c" } },
@@ -243,29 +322,29 @@ export const FACTIONS: readonly Faction[] = [
     accent: "#e09a4a",
     heroes: [
       { id: "ash_warlord", classes: [{ id: "warrior", spec: "warrior_twohand" }, { id: "monk", spec: "monk_arts" }], name: "Вождь", title: "Голос кланов", description: "Ведёт орду в атаку, усиливает ближний бой.",
-        relic: { name: "Топор Первого Костра", description: "Каждый третий удар героя бьёт дважды." }, armyBonus: "+2 к атаке пехоты",
+        relic: { name: "Топор Первого Костра", description: "Каждый третий удар героя бьёт дважды." }, armyBonus: "+2 к атаке пехоты", bonus: { tags: [T.Infantry], effect: { stat: "attack", value: 2 } },
         model: { body: M.Giant, weapon: W.Axe, head: H.Horns, cape: true, tint: "#6f8a3a" } },
       { id: "ash_shaman", classes: [{ id: "mage", spec: "mage_lightning" }, { id: "monk", spec: "monk_healing" }], name: "Шаман бури", title: "Говорящий с громом", description: "Призывает молнии и лечит воинов.",
-        relic: { name: "Тотем Грома", description: "Молния прыгает на соседнюю цель." }, armyBonus: "+15% урона шаманов",
+        relic: { name: "Тотем Грома", description: "Молния прыгает на соседнюю цель." }, armyBonus: "+15% урона шаманов", bonus: { tags: [T.Shaman], effect: { stat: "damage", value: 0.15 } },
         model: { body: M.Robed, weapon: W.Staff, head: H.Antlers, tint: "#7a5a3a" } },
       { id: "ash_beastmaster", classes: [{ id: "warrior", spec: "warrior_dual" }], name: "Укротитель", title: "Брат зверей", description: "Ездит на волке, ведёт зверей и всадников.",
-        relic: { name: "Клык Старого Волка", description: "Звери получают +1 к скорости." }, armyBonus: "+1 к скорости зверей",
+        relic: { name: "Клык Старого Волка", description: "Звери получают +1 к скорости." }, armyBonus: "+1 к скорости зверей", bonus: { tags: [T.Beast], effect: { stat: "speed", value: 1 } },
         model: { body: M.Rider, weapon: W.Spear, head: H.Feather, tint: "#6b6f74" } },
       { id: "ash_berserker", classes: [{ id: "warrior", spec: "warrior_twohand" }], name: "Берсерк", title: "Красная ярость", description: "Чем меньше здоровья, тем сильнее бьёт.",
-        relic: { name: "Цепной молот", description: "Убийство отряда даёт дополнительный ход." }, armyBonus: "+10% урона при здоровье ниже половины",
+        relic: { name: "Цепной молот", description: "Убийство отряда даёт дополнительный ход." }, armyBonus: "+10% урона при здоровье ниже половины", bonus: { tags: [] },
         model: { body: M.Giant, weapon: W.Hammer, head: H.Bare, tint: "#a3593a" } },
     ],
-    tiers: tiers([
+    tiers: tiers(FactionId.Ash, [
       [{ id: "ash_raider", name: "Налётчик", role: R.Melee, description: "Быстрый и злой, но слабо защищён.", initiative: 2, model: { body: M.Soldier, weapon: W.Axe, head: H.Bare, tint: "#6f8a3a" } },
        { id: "ash_brute", name: "Рубака", role: R.Melee, description: "Крепче налётчика, со щитом.", hp: 1.2, speed: -1, model: { body: M.Soldier, weapon: W.Sword, head: H.Horns, shield: true, tint: "#5e7a30" } }],
-      [{ id: "ash_axethrower", name: "Метатель топоров", role: R.Ranged, description: "Метает топоры, хорош и вблизи.", model: { body: M.Soldier, weapon: W.Axe, head: H.Feather, tint: "#7d8f4a" } },
-       { id: "ash_slinger", name: "Пращник", role: R.Ranged, description: "Бьёт дальше, но слабее.", attack: -1, model: { body: M.Soldier, weapon: W.None, head: H.Hood, tint: "#8a6a4a" } }],
-      [{ id: "ash_witchdoctor", name: "Знахарь", role: R.Caster, description: "Лечит и проклинает врагов.", model: { body: M.Robed, weapon: W.Staff, head: H.Skull, tint: "#6a4a7a" } },
-       { id: "ash_totemist", name: "Тотемщик", role: R.Caster, description: "Ставит тотемы, усиливающие своих.", model: { body: M.Robed, weapon: W.Hammer, head: H.Antlers, tint: "#7a5a3a" } }],
-      [{ id: "ash_wolfrider", name: "Волчий всадник", role: R.Melee, description: "Быстрый всадник, бьёт и отходит.", speed: 3, model: { body: M.Rider, weapon: W.Axe, head: H.Bare, tint: "#6b6f74" } },
-       { id: "ash_boarrider", name: "Наездник на вепре", role: R.Melee, description: "Медленнее, но сносит строй.", hp: 1.2, speed: 1, model: { body: M.Rider, weapon: W.Spear, head: H.Horns, tint: "#5a3a2a" } }],
+      [{ id: "ash_axethrower", name: "Метатель топоров", role: R.Ranged, description: "Метает топоры, хорош и вблизи.", model: { body: M.Soldier, weapon: W.TwinAxes, head: H.Feather, tint: "#7d8f4a" } },
+       { id: "ash_slinger", name: "Пращник", role: R.Ranged, description: "Бьёт дальше, но слабее.", attack: -1, model: { body: M.Soldier, weapon: W.Sling, head: H.Hood, tint: "#8a6a4a" } }],
+      [{ id: "ash_witchdoctor", name: "Знахарь", role: R.Caster, tags: [T.Shaman], description: "Лечит и проклинает врагов.", model: { body: M.Robed, weapon: W.Staff, head: H.Skull, tint: "#6a4a7a" } },
+       { id: "ash_totemist", name: "Тотемщик", role: R.Caster, tags: [T.Shaman], description: "Ставит тотемы, усиливающие своих.", model: { body: M.Robed, weapon: W.Totem, head: H.Antlers, tint: "#7a5a3a" } }],
+      [{ id: "ash_wolfrider", name: "Волчий всадник", role: R.Melee, tags: [T.Beast], description: "Быстрый всадник, бьёт и отходит.", speed: 3, model: { body: M.Rider, weapon: W.Axe, head: H.Bare, tint: "#6b6f74" } },
+       { id: "ash_boarrider", name: "Наездник на вепре", role: R.Melee, tags: [T.Beast], description: "Медленнее, но сносит строй.", hp: 1.2, speed: 1, model: { body: M.Rider, weapon: W.Spear, head: H.Horns, tint: "#5a3a2a" } }],
       [{ id: "ash_ogre", name: "Огр-громила", role: R.Melee, description: "Огромный, много здоровья.", hp: 1.3, model: { body: M.Giant, weapon: W.Hammer, head: H.Bare, tint: "#8a7a5a" } },
-       { id: "ash_ogremage", name: "Огр-чародей", role: R.Caster, description: "Огр, выучивший пару заклинаний.", attack: 2, model: { body: M.Giant, weapon: W.Staff, head: H.Hood, tint: "#5a6a9a" } }],
+       { id: "ash_ogremage", name: "Огр-чародей", role: R.Caster, tags: [T.Shaman], description: "Огр, выучивший пару заклинаний.", attack: 2, model: { body: M.Giant, weapon: W.Staff, head: H.Hood, tint: "#5a6a9a" } }],
       [{ id: "ash_catapult", name: "Камнемёт", role: R.Siege, description: "Бросает камни через поле.", model: { body: M.Siege, weapon: W.None, head: H.Bare, tint: "#6e4a2a" } },
        { id: "ash_ram", name: "Таран", role: R.Siege, description: "Медленно едет и крушит всё перед собой.", hp: 1.4, model: { body: M.Siege, weapon: W.Hammer, head: H.Horns, tint: "#5a3a22" } }],
       [{ id: "ash_wyvern", name: "Виверна", role: R.Flyer, description: "Летучий ящер с ядовитым хвостом.", model: { body: M.Dragon, weapon: W.Claws, head: H.Horns, wings: true, tint: "#7a3a2a" } },
@@ -281,19 +360,19 @@ export const FACTIONS: readonly Faction[] = [
     accent: "#7ee07a",
     heroes: [
       { id: "rot_necromancer", classes: [{ id: "mage", spec: "mage_ice" }], name: "Некромант", title: "Собиратель душ", description: "Поднимает павших врагов в армию.",
-        relic: { name: "Череп Шёпотов", description: "После боя часть павших встаёт скелетами." }, armyBonus: "+10% к поднятию нежити",
+        relic: { name: "Череп Шёпотов", description: "После боя часть павших встаёт скелетами." }, armyBonus: "+10% к поднятию нежити", bonus: { tags: [] },
         model: { body: M.Robed, weapon: W.Staff, head: H.Hood, tint: "#2e2a3a" } },
       { id: "rot_deathknight", classes: [{ id: "warrior", spec: "warrior_twohand" }, { id: "mage", spec: "mage_ice" }], name: "Рыцарь тлена", title: "Чёрный клинок", description: "Мёртвый рыцарь, ведёт конницу мертвецов.",
-        relic: { name: "Хладный меч", description: "Удар замедляет цель." }, armyBonus: "+2 к атаке всадников",
+        relic: { name: "Хладный меч", description: "Удар замедляет цель." }, armyBonus: "+2 к атаке всадников", bonus: { tags: [T.Rider], effect: { stat: "attack", value: 2 } },
         model: { body: M.Knight, weapon: W.Sword, head: H.Horns, cape: true, tint: "#3c4250" } },
       { id: "rot_lich", classes: [{ id: "mage", spec: "mage_earth" }], name: "Костяной лорд", title: "Неумирающий", description: "Древний маг, его проклятия ослабляют врага.",
-        relic: { name: "Филактерия", description: "Один раз за бой герой встаёт после смерти." }, armyBonus: "-1 к защите врагов",
+        relic: { name: "Филактерия", description: "Один раз за бой герой встаёт после смерти." }, armyBonus: "-1 к защите врагов", bonus: { tags: [], enemies: true, effect: { stat: "defense", value: -1 } },
         model: { body: M.Spirit, weapon: W.Staff, head: H.Crown, tint: "#bfc8c0" } },
       { id: "rot_vampire", classes: [{ id: "monk", spec: "monk_arts" }, { id: "mage", spec: "mage_fire" }], name: "Вампирша", title: "Госпожа крови", description: "Пьёт жизнь врагов и лечит свои отряды.",
-        relic: { name: "Кубок Алой Ночи", description: "Удары героя восстанавливают здоровье." }, armyBonus: "+5% вампиризма",
+        relic: { name: "Кубок Алой Ночи", description: "Удары героя восстанавливают здоровье." }, armyBonus: "+5% вампиризма", bonus: { tags: [] },
         model: { body: M.Robed, weapon: W.Sword, head: H.Crown, cape: true, tint: "#6a1a2a" } },
     ],
-    tiers: tiers([
+    tiers: tiers(FactionId.Rot, [
       [{ id: "rot_skeleton", name: "Скелет", role: R.Melee, description: "Дешёвый, не чувствует страха.", model: { body: M.Soldier, weapon: W.Sword, head: H.Skull, shield: true, tint: "#d8d2c0" } },
        { id: "rot_ghoul", name: "Гуль", role: R.Melee, description: "Быстрый, раны заживают поеданием павших.", initiative: 2, model: { body: M.Soldier, weapon: W.Claws, head: H.Bare, tint: "#7a8a6a" } }],
       [{ id: "rot_skelarcher", name: "Скелет-лучник", role: R.Ranged, description: "Стреляет костяными стрелами.", model: { body: M.Soldier, weapon: W.Bow, head: H.Skull, tint: "#d8d2c0" } },
@@ -319,19 +398,19 @@ export const FACTIONS: readonly Faction[] = [
     accent: "#b8a0f0",
     heroes: [
       { id: "grove_druid", classes: [{ id: "monk", spec: "monk_healing" }, { id: "mage", spec: "mage_earth" }], name: "Верховный друид", title: "Голос леса", description: "Превращается в зверя и лечит армию.",
-        relic: { name: "Посох Первого Дуба", description: "Отряды в начале хода лечатся." }, armyBonus: "+10% здоровья зверей",
+        relic: { name: "Посох Первого Дуба", description: "Отряды в начале хода лечатся." }, armyBonus: "+10% здоровья зверей", bonus: { tags: [T.Beast], effect: { stat: "hp", value: 0.1 } },
         model: { body: M.Robed, weapon: W.Staff, head: H.Antlers, tint: "#5a7a3a" } },
       { id: "grove_huntress", classes: [{ id: "warrior", spec: "warrior_dual" }], name: "Охотница", title: "Тень опушки", description: "Лучшая лучница леса, ведёт стрелков.",
-        relic: { name: "Лук Лунного Серпа", description: "Выстрелы героя проходят сквозь цель." }, armyBonus: "+1 к атаке стрелков",
+        relic: { name: "Лук Лунного Серпа", description: "Выстрелы героя проходят сквозь цель." }, armyBonus: "+1 к атаке стрелков", bonus: { tags: [T.Shooter], effect: { stat: "attack", value: 1 } },
         model: { body: M.Soldier, weapon: W.Bow, head: H.Hood, cape: true, tint: "#3a6a4a" } },
       { id: "grove_warden", classes: [{ id: "warrior", spec: "warrior_shield" }, { id: "monk", spec: "monk_healing" }], name: "Страж рощи", title: "Шипы и кора", description: "Танк леса, отражает урон обратно.",
-        relic: { name: "Кора Древня", description: "Атакующие героя получают урон шипами." }, armyBonus: "+2 к защите древней",
+        relic: { name: "Кора Древня", description: "Атакующие героя получают урон шипами." }, armyBonus: "+2 к защите древней", bonus: { tags: [T.Treant], effect: { stat: "defense", value: 2 } },
         model: { body: M.Knight, weapon: W.Spear, head: H.Antlers, shield: true, tint: "#6a5a3a" } },
       { id: "grove_moonpriestess", classes: [{ id: "monk", spec: "monk_light" }, { id: "mage", spec: "mage_air" }], name: "Жрица луны", title: "Серебряный свет", description: "Магия луны и звёзд, усиливает фей.",
-        relic: { name: "Лунный венец", description: "Ночью заклинания сильнее." }, armyBonus: "+15% урона заклинателей",
+        relic: { name: "Лунный венец", description: "Ночью заклинания сильнее." }, armyBonus: "+15% урона заклинателей", bonus: { tags: [T.Caster], effect: { stat: "damage", value: 0.15 } },
         model: { body: M.Robed, weapon: W.Staff, head: H.Crown, cape: true, tint: "#7a6ab8" } },
     ],
-    tiers: tiers([
+    tiers: tiers(FactionId.Grove, [
       [{ id: "grove_tracker", name: "Следопыт", role: R.Melee, description: "Лёгкий боец с клинками, бьёт первым.", initiative: 3, model: { body: M.Soldier, weapon: W.Sword, head: H.Hood, tint: "#4a6a3a" } },
        { id: "grove_sprite", name: "Лесной дух", role: R.Flyer, description: "Маленький, быстрый и хрупкий.", hp: 0.7, model: { body: M.Spirit, weapon: W.None, head: H.Bare, wings: true, tint: "#9ad08a" } }],
       [{ id: "grove_archer", name: "Лучница", role: R.Ranged, description: "Два выстрела за ход.", model: { body: M.Soldier, weapon: W.Bow, head: H.Feather, tint: "#3a6a4a" } },
@@ -353,6 +432,10 @@ export const FACTIONS: readonly Faction[] = [
 const factionById = new Map<string, Faction>(FACTIONS.map((f) => [f.id, f]));
 const unitById = new Map<string, UnitDef>(FACTIONS.flatMap((f) => f.tiers.flatMap((t) => t.units.map((u): [string, UnitDef] => [u.id, u]))));
 const unitFaction = new Map<string, FactionId>(FACTIONS.flatMap((f) => f.tiers.flatMap((t) => t.units.map((u): [string, FactionId] => [u.id, f.id]))));
+
+/** Whether a hero bonus boosts this unit (own army; enemy bonuses work on every enemy stack). */
+export const bonusApplies = (rule: ArmyBonusRule, unit: Pick<UnitDef, "tags">): boolean =>
+  !rule.enemies && (rule.tags.length === 0 || rule.tags.some((t) => unit.tags.includes(t)));
 
 export const getFaction = (id: string): Faction | undefined => factionById.get(id);
 export const getUnit = (id: string): UnitDef | undefined => unitById.get(id);

@@ -361,6 +361,17 @@ function openFactionModal() {
   $("faction-modal").classList.remove("hidden");
 }
 
+/** Who a hero's army bonus works on, in words: unit names, "вся армия" or "все отряды врага". */
+function bonusUnits(h, f) {
+  const b = h.bonus;
+  if (!b) return "";
+  const note = b.effect ? "" : " (пока не действует в бою)";
+  if (b.enemies) return `На все отряды врага${note}`;
+  if (!b.tags.length) return `На всю армию${note}`;
+  const names = f.tiers.flatMap((t) => t.units).filter((u) => b.tags.some((t) => u.tags.includes(t))).map((u) => u.name);
+  return `Подходят: ${names.join(", ")}${note}`;
+}
+
 function renderFactionModal() {
   $("faction-tabs").innerHTML = factions.map((f) => `<button type="button" class="faction-tab ${f.id === pickedFaction ? "active" : ""}"
       style="--fc:${f.color}" data-faction="${f.id}">
@@ -376,7 +387,8 @@ function renderFactionModal() {
         <p>${esc(h.description)}</p>
         <div class="relic-line" title="${esc(h.relic.description)}">🗡️ ${esc(h.relic.name)}</div>
         <div class="muted">${esc(h.relic.description)}</div>
-        <div class="bonus-line">${esc(h.armyBonus)}</div>
+        <div class="bonus-line">★ ${esc(h.armyBonus)}</div>
+        <div class="muted bonus-units">${esc(bonusUnits(h, f))}</div>
         <button type="button" class="btn-primary" data-hero="${h.id}" ${h.id === hero.factionHero ? "disabled" : ""}>
           ${h.id === hero.factionHero ? "Ваш герой" : f.id === hero.faction || !hero.faction ? "Выбрать" : "Сменить фракцию"}</button>
       </article>`).join("")}</div>

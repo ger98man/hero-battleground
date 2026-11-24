@@ -15,7 +15,7 @@
 import type { CombatProfile } from "./build.js";
 import { skillById } from "./build.js";
 import type { ArmorType, DamageType, PassiveMods, ScaleStat, Skill } from "./classes.js";
-import { getUnit, UnitRole, type ArmyStack } from "./factions.js";
+import { bonusApplies, factionHeroOf, getUnit, UnitRole, type ArmyBonusRule, type ArmyStack, type BonusEffect } from "./factions.js";
 import { effectiveDefense } from "./stats.js";
 
 export type Side = "player" | "bot";
@@ -219,6 +219,30 @@ export interface Fighter {
   figure?: { faction: string; hero: string };
 }
 
+/** The army bonus of the fighter's faction hero, if any. */
+function bonusOf(f: Fighter): ArmyBonusRule | undefined {
+  return f.figure ? factionHeroOf({ faction: f.figure.faction, heroId: f.figure.hero })?.bonus : undefined;
+}
+
+function applyBonus(st: Stack, effect: BonusEffect) {
+  if (effect.stat === "attack") st.attack = Math.max(0, st.attack + effect.value);
+  if (effect.stat === "defense") st.defense = Math.max(0, st.defense + effect.value);
+  if (effect.stat === "speed") st.speed = Math.max(1, st.speed + effect.value);
+  if (effect.stat === "damage") st.damageMult = (st.damageMult ?? 1) * (1 + effect.value);
+  if (effect.stat === "hp") st.hpPer = st.hpTop = Math.round(st.hpPer * (1 + effect.value));
+}
+
+/** Hero army bonuses: each side's bonus on its own matching stacks, "enemies" bonuses on the other side. */
+function applyArmyBonuses(stacks: Stack[], bonuses: Record<Side, ArmyBonusRule | undefined>) {
+  for (const st of stacks) {
+    const unit = getUnit(st.unitId);
+    const own = bonuses[st.side];
+    const foe = bonuses[st.side === "player" ? "bot" : "player"];
+    if (unit && own?.effect && bonusApplies(own, unit)) applyBonus(st, own.effect);
+    if (foe?.effect && foe.enemies) applyBonus(st, foe.effect);
+  }
+}
+
 function makeStacks(side: Side, army: ArmyStack[], column: number, prefix: string, hero: CombatProfile): Stack[] {
   const units = army.flatMap((a) => {
     const u = getUnit(a.unitId);
@@ -307,6 +331,7 @@ export function createBattle(player: Fighter, bot: Fighter, rng: Rng = Math.rand
   const stacks = hasArmies
     ? [...makeStacks("player", player.army ?? [], 1, "a", player.profile), ...makeStacks("bot", bot.army ?? [], width - 2, "b", bot.profile)]
     : [];
+  applyArmyBonuses(stacks, { player: bonusOf(player), bot: bonusOf(bot) });
   const state: BattleState = {
     version: 2,
     mode,

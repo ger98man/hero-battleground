@@ -47,6 +47,9 @@
       hammer: `<path d="M${x - 2 * s} ${y + 10 * s}L${x + 3 * s} ${y - 20 * s}" stroke="${WOOD}" stroke-width="${2.8 * s}" stroke-linecap="round"/><rect x="${x - 5 * s}" y="${y - 28 * s}" width="${16 * s}" height="${9 * s}" rx="${1.5 * s}" fill="url(#steel${c.id})" ${OUT} transform="rotate(10 ${x + 3 * s} ${y - 23 * s})"/>`,
       scythe: `<path d="M${x - 2 * s} ${y + 20 * s}L${x + 3 * s} ${y - 26 * s}" stroke="#3a2a22" stroke-width="${2.6 * s}" stroke-linecap="round"/><path d="M${x + 3 * s} ${y - 26 * s}Q${x - 16 * s} ${y - 30 * s} ${x - 22 * s} ${y - 14 * s}Q${x - 12 * s} ${y - 24 * s} ${x + 2 * s} ${y - 20 * s}Z" fill="url(#steel${c.id})" ${OUT}/>`,
       claws: `<path d="M${x} ${y}l${5 * s} -${4 * s}M${x + 1 * s} ${y + 3 * s}l${6 * s} -${2 * s}M${x + 1 * s} ${y + 6 * s}l${6 * s} ${0.5 * s}" stroke="#f2ead6" stroke-width="${1.6 * s}" stroke-linecap="round"/>`,
+      sling: `<path d="M${x} ${y}Q${x + 10 * s} ${y - 14 * s} ${x + 12 * s} ${y - 30 * s}" fill="none" stroke="#5a3a1a" stroke-width="${1.4 * s}"/><path d="M${x + 4 * s} ${y - 36 * s}Q${x + 20 * s} ${y - 38 * s} ${x + 18 * s} ${y - 20 * s}" fill="none" stroke="#e8e0c8" stroke-width="${1 * s}" stroke-dasharray="2 2" opacity=".8"/><circle cx="${x + 12 * s}" cy="${y - 30 * s}" r="${3.6 * s}" fill="#8a8a86" ${OUT}/>`,
+      totem: `<path d="M${x} ${y + 22 * s}L${x + 1 * s} ${y - 30 * s}" stroke="${WOOD}" stroke-width="${3.4 * s}" stroke-linecap="round"/><rect x="${x - 5 * s}" y="${y - 40 * s}" width="${12 * s}" height="${14 * s}" rx="${2 * s}" fill="${shade(WOOD, .15)}" ${OUT}/><circle cx="${x - 1 * s}" cy="${y - 35 * s}" r="${1.4 * s}" fill="${c.accent}" filter="url(#glow${c.id})"/><circle cx="${x + 3.5 * s}" cy="${y - 35 * s}" r="${1.4 * s}" fill="${c.accent}" filter="url(#glow${c.id})"/><path d="M${x - 1 * s} ${y - 30 * s}h${5 * s}" stroke="#1a1410" stroke-width="1"/><path d="M${x - 5 * s} ${y - 40 * s}q-${6 * s} -${4 * s} -${4 * s} -${10 * s}M${x + 7 * s} ${y - 40 * s}q${6 * s} -${4 * s} ${4 * s} -${10 * s}" stroke="#e6dcc2" stroke-width="${2.2 * s}" fill="none" stroke-linecap="round"/><path d="M${x + 7 * s} ${y - 28 * s}l${6 * s} ${8 * s}M${x + 7 * s} ${y - 26 * s}l${3 * s} ${10 * s}" stroke="${c.trim}" stroke-width="${1.6 * s}"/>`,
+      twin_axes: "",
       none: "",
     };
     return w[kind] ?? "";
@@ -91,7 +94,12 @@
     parts.push(`<path d="M${cx - half} ${sh + 2}L${cx - half - 5} ${handY}" stroke="${shade(c.tint, -.15)}" stroke-width="${5 * w}" stroke-linecap="round"/>`);
     parts.push(`<path d="M${cx + half} ${sh + 2}L${cx + half + 5} ${handY}" stroke="${shade(c.tint, -.15)}" stroke-width="${5 * w}" stroke-linecap="round"/>`);
     parts.push(head(cx, top, hr, spec.head, c));
-    parts.push(weapon(cx + half + 5, handY, spec.weapon, c, scale * (w > 1.2 ? 1.15 : 1)));
+    if (spec.weapon === "twin_axes") {
+      // a throwing axe in each hand, the left one mirrored, smaller and raised
+      parts.push(weapon(cx + half + 5, handY, "axe", c, scale * .8));
+      const lx = cx - half - 5;
+      parts.push(`<g transform="translate(${2 * lx} -6) scale(-1 1)">${weapon(lx, handY, "axe", c, scale * .8)}</g>`);
+    } else parts.push(weapon(cx + half + 5, handY, spec.weapon, c, scale * (w > 1.2 ? 1.15 : 1)));
     if (spec.shield) parts.push(shieldAt(cx - half - 5, handY, c, scale));
     return parts.join("");
   }
