@@ -108,6 +108,8 @@ export type ModelSpec = {
   wings?: boolean;
   /** Main color of the figure (armor, robe, fur); faction colors are used for trim. */
   tint: string;
+  /** Own drawing of this creature in public/models.js (SHAPES); units get their id. Without it the figure is built from parts. */
+  shape?: string;
 };
 
 export type UnitDef = {
@@ -260,7 +262,7 @@ function unit(faction: FactionId, tier: number, input: UnitInput): UnitDef {
     speed: ROLE_SPEED[input.role] + (input.speed ?? 0),
     cost: TIER_COST[i],
     attribute: ROLE_ATTRIBUTE[input.role],
-    model: input.model,
+    model: { ...input.model, shape: input.id },
   };
 }
 
