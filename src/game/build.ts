@@ -19,7 +19,7 @@ import {
   type StatKey,
   type Stats,
 } from "./classes.js";
-import { dodgeFor, maxHpFor, maxManaFor, parryFor, procBonusFor, STAT_RULES, unitDamageMultiplier, type UnitAttribute } from "./stats.js";
+import { dodgeFor, maxHpFor, maxManaFor, moveRangeFor, parryFor, speedBonusFor, procBonusFor, STAT_RULES, unitDamageMultiplier, type UnitAttribute } from "./stats.js";
 
 export interface BuildClass {
   id: string;
@@ -110,7 +110,7 @@ export function heroStats(level: number, build: HeroBuild, bonus: Partial<Stats>
     intellect: base,
     mastery: 0,
     // Hero level: +1 Здоровье every level, +1 Инициатива every 2nd level.
-    initiative: base + Math.floor((level - 1) / 2),
+    initiative: base + Math.floor((level - 1) / STAT_RULES.initiativeLevels),
     health: base + (level - 1),
     craft: 0,
   };
@@ -121,6 +121,30 @@ export function heroStats(level: number, build: HeroBuild, bonus: Partial<Stats>
     for (const [k, v] of Object.entries(def.perRank) as [StatKey, number][]) stats[k] += v * c.rank;
   }
   return stats;
+}
+
+/** Where each stat value comes from: [label, amount] parts that add up to heroStats(). */
+export function statSources(level: number, build: HeroBuild, guildBonus: Partial<Stats> = {}): Record<StatKey, [string, number][]> {
+  const base = STAT_RULES.base;
+  const out: Record<StatKey, [string, number][]> = {
+    strength: [["Основа", base]],
+    dexterity: [["Основа", base]],
+    intellect: [["Основа", base]],
+    mastery: [],
+    initiative: [["Основа", base]],
+    health: [["Основа", base]],
+    craft: [],
+  };
+  const lvlInit = Math.floor((level - 1) / STAT_RULES.initiativeLevels);
+  if (lvlInit) out.initiative.push([`Уровень ${level}`, lvlInit]);
+  if (level > 1) out.health.push([`Уровень ${level}`, level - 1]);
+  for (const c of build.classes) {
+    const def = getClass(c.id);
+    if (!def) continue;
+    for (const [k, v] of Object.entries(def.perRank) as [StatKey, number][]) if (v) out[k].push([`${def.name}, ранг ${c.rank}`, v * c.rank]);
+  }
+  for (const [k, v] of Object.entries(guildBonus) as [StatKey, number][]) if (v && out[k]) out[k].push(["Гильдии", v]);
+  return out;
 }
 
 /** Skills the build can put into slots (without basic attacks). Hybrid skills come first. */
@@ -226,7 +250,6 @@ export function combatProfile(level: number, build: HeroBuild, bonus: Partial<St
   }
   addMods(mods, relicFor(build).mods);
   if (build.talents.includes("thick_skin")) addMods(mods, { physicalArmor: 0.2, magicArmor: 0.2 });
-  const over = (v: number) => Math.max(0, v - 10);
   const primary = rankedClasses(build)[0];
   return {
     className: overallClass(build).name,
@@ -235,8 +258,8 @@ export function combatProfile(level: number, build: HeroBuild, bonus: Partial<St
     maxMana: maxManaFor(stats.intellect),
     physicalArmor: Math.round(physArmor * (1 + mods.physicalArmor)),
     magicArmor: Math.round(magArmor * (1 + mods.magicArmor)),
-    moveRange: 4 + Math.min(2, Math.floor(over(stats.initiative) / 10)),
-    speedBonus: Math.min(0.15, over(stats.initiative) * 0.01),
+    moveRange: moveRangeFor(stats.initiative),
+    speedBonus: speedBonusFor(stats.initiative),
     dodge: dodgeFor(stats.dexterity),
     parry: parryFor(stats.strength),
     masteryVsDefense: Math.min(1, stats.mastery * STAT_RULES.masteryVsDefense),

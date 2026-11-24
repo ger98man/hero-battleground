@@ -789,3 +789,16 @@ body:not(.battle-page) .services .service-btn {
 .guild-picks { display: flex; flex-wrap: wrap; gap: 6px; }
 .stat-table { width: 100%; border-collapse: collapse; }
 .stat-table td, .stat-table th { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+
+/* Stat tooltips on the hero page: what the stat gives with the current numbers. */
+.stat-row { position: relative; cursor: help; }
+.stat-tip { display: none; position: absolute; z-index: 30; right: calc(100% + 10px); top: -6px; width: 360px; padding: 10px 12px;
+  background: #fffaf0; color: #2c2216; border: 1px solid #b89a5e; border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+  font-size: 13px; line-height: 1.4; font-family: inherit; text-align: left; }
+.stat-row:hover .stat-tip, .stat-row:focus .stat-tip, .stat-row:focus-within .stat-tip { display: block; }
+.stat-list .stat-row .stat-tip b, .stat-list.compact .stat-row .stat-tip b { text-align: left; font-family: inherit; font-size: inherit; color: #7a2b1e; min-width: 0; }
+.stat-tip .tip-title { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.stat-tip .tip-hint, .stat-tip .tip-src, .stat-tip .tip-note { color: #6b5a40; }
+.stat-tip ul { margin: 6px 0; padding-left: 18px; }
+.stat-tip .tip-note { font-size: 11px; font-style: italic; margin-top: 4px; }
+@media (max-width: 900px) { .stat-tip { right: auto; left: 0; top: 100%; width: min(360px, 90vw); } }

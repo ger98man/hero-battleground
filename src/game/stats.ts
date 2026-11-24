@@ -31,6 +31,15 @@ export const STAT_RULES = {
   procPerMastery: 0.01,
   /** Army units gain this much damage per point of the hero's matching stat above base. */
   unitDamagePerStat: 0.01,
+  /** Movement: moveBase cells + 1 per initiativePerMove Инициатива above base, at most moveMaxBonus. */
+  moveBase: 4,
+  initiativePerMove: 10,
+  moveMaxBonus: 2,
+  /** Turn frequency: +speedPerInitiative per Инициатива above base, at most speedCap. */
+  speedPerInitiative: 0.01,
+  speedCap: 0.15,
+  /** Hero level: +1 Здоровье every level, +1 Инициатива every initiativeLevels levels. */
+  initiativeLevels: 2,
 } as const;
 
 /** The stat an army unit is built on. Its damage grows with the hero's value of that stat. */
@@ -46,6 +55,9 @@ const over = (v: number) => Math.max(0, v - STAT_RULES.base);
 
 export const maxHpFor = (health: number) => STAT_RULES.hpBase + STAT_RULES.hpPerHealth * health;
 export const maxManaFor = (intellect: number) => STAT_RULES.manaBase + STAT_RULES.manaPerIntellect * intellect;
+export const moveRangeFor = (initiative: number) =>
+  STAT_RULES.moveBase + Math.min(STAT_RULES.moveMaxBonus, Math.floor(over(initiative) / STAT_RULES.initiativePerMove));
+export const speedBonusFor = (initiative: number) => Math.min(STAT_RULES.speedCap, over(initiative) * STAT_RULES.speedPerInitiative);
 export const parryFor = (strength: number) => Math.min(STAT_RULES.defenseCap, over(strength) * STAT_RULES.parryPerStrength);
 export const dodgeFor = (dexterity: number) => Math.min(STAT_RULES.defenseCap, over(dexterity) * STAT_RULES.dodgePerDexterity);
 

@@ -72,6 +72,57 @@ const cloneBuild = () => JSON.parse(JSON.stringify(hero.build));
 
 const STAT_ICONS = { strength: "✊", dexterity: "🪶", intellect: "📖", mastery: "🎯", initiative: "⏳", health: "❤️", craft: "⚒️" };
 
+const pct = (x) => `${(Math.round(x * 1000) / 10).toString().replace(".", ",")}%`;
+const num = (x) => (Math.round(x * 10) / 10).toString().replace(".", ",");
+
+/** Tooltip for one stat: what it gives for this hero, with the formula and the numbers, and where the value comes from. */
+function statTip(k, name, h) {
+  const p = h.profile;
+  const R = catalog.statRules;
+  const v = p.stats[k];
+  const unitBonus = (attr) => pct(p.unitDamage[attr] - 1);
+  const skillDmg = (stat) => `Урон умений на ${stat}: сила умения × ${num(R.damageScale)} × ${v} = <b>${num(R.damageScale * v)}</b> при силе умения 1,0`;
+  const lines = {
+    strength: [
+      skillDmg("Силу"),
+      `Парирование: (${v} − ${R.base}) × ${pct(R.parryPerStrength)} = <b>${pct(p.parry)}</b> (не больше ${pct(R.defenseCap)}), только против физических ударов вплотную`,
+      `Отряды на Силу (ближний бой, осадные): +${pct(R.unitDamagePerStat)} за очко сверх ${R.base} = <b>+${unitBonus("strength")}</b> урона`,
+    ],
+    dexterity: [
+      skillDmg("Ловкость"),
+      `Уклонение: (${v} − ${R.base}) × ${pct(R.dodgePerDexterity)} = <b>${pct(p.dodge)}</b> (не больше ${pct(R.defenseCap)}), против физических атак`,
+      `Отряды на Ловкость (стрелки, летающие): +${pct(R.unitDamagePerStat)} за очко сверх ${R.base} = <b>+${unitBonus("dexterity")}</b> урона`,
+    ],
+    intellect: [
+      `Мана: ${R.manaBase} + ${R.manaPerIntellect} × ${v} = <b>${p.maxMana}</b>`,
+      skillDmg("Интеллект"),
+      `Магическая броня: +${v}`,
+      `Отряды на Интеллект (заклинатели): +${pct(R.unitDamagePerStat)} за очко сверх ${R.base} = <b>+${unitBonus("intellect")}</b> урона`,
+    ],
+    mastery: [
+      `Против защиты: −${pct(R.masteryVsDefense)} × ${v} = <b>−${pct(p.masteryVsDefense)}</b> к парированию и уклонению цели`,
+      `Особые эффекты: +${pct(R.procPerMastery)} × ${v} = <b>+${pct(p.procBonus)}</b> к шансу (эффектов со случайным шансом пока нет)`,
+    ],
+    initiative: [
+      `Частота ходов: (${v} − ${R.base}) × ${pct(R.speedPerInitiative)} = <b>+${pct(p.speedBonus)}</b> (не больше ${pct(R.speedCap)})`,
+      `Перемещение: ${R.moveBase} + 1 за каждые ${R.initiativePerMove} сверх ${R.base} = <b>${p.moveRange} кл.</b> (не больше ${R.moveBase + R.moveMaxBonus})`,
+      `Очерёдность: при равенстве на шкале первым ходит тот, у кого Инициатива выше`,
+    ],
+    health: [
+      `Очки жизни: ${R.hpBase} + ${R.hpPerHealth} × ${v} = <b>${p.maxHp}</b>`,
+    ],
+    craft: [
+      `Ремесло: <b>${v}</b>. Будет влиять на производство, торговлю и починку (в разработке)`,
+    ],
+  }[k] ?? [];
+  const src = (h.statSources?.[k] ?? []).map(([label, n]) => `${esc(label)} ${n >= 0 ? "+" : ""}${n}`).join(", ");
+  return `<div class="tip-title">${STAT_ICONS[k] ?? ""} ${esc(name)}: ${v}</div>
+    <div class="tip-hint">${esc(STAT_HINTS[k] ?? "")}</div>
+    <ul>${lines.map((l) => `<li>${l}</li>`).join("")}</ul>
+    ${src ? `<div class="tip-src">Откуда: ${src}</div>` : ""}
+    <div class="tip-note">Формулы временные, их поменяет балансировка.</div>`;
+}
+
 function vitalBar(name, cls, value) {
   return `<div class="vital"><span class="vital-name">${name}</span><div class="bar ${cls}"><div style="width:100%"></div><span>${value} / ${value}</span></div></div>`;
 }
@@ -87,8 +138,9 @@ function render() {
   $("class-line").textContent = h.build.classes.map((c) => `${classDef(c.id).name} ${ROMAN[c.rank]}`).join(" + ");
   const p = h.profile;
   $("stats").innerHTML = p
-    ? Object.entries(catalog.statNames).map(([k, name]) => `<div class="stat-row" title="${esc(STAT_HINTS[k])}">
-        <span class="stat-icon">${STAT_ICONS[k] ?? "•"}</span><span class="stat-name">${name}</span><b>${p.stats[k]}</b></div>`).join("")
+    ? Object.entries(catalog.statNames).map(([k, name]) => `<div class="stat-row" tabindex="0">
+        <span class="stat-icon">${STAT_ICONS[k] ?? "•"}</span><span class="stat-name">${name}</span><b>${p.stats[k]}</b>
+        <div class="stat-tip" role="tooltip">${statTip(k, name, h)}</div></div>`).join("")
     : `<p class="muted">Выберите класс, чтобы увидеть характеристики.</p>`;
   $("vitals").innerHTML = p
     ? vitalBar("Здоровье", "hp", p.maxHp) + vitalBar("Физическая броня", "parmor", p.physicalArmor) +
