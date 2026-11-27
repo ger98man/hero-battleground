@@ -19,6 +19,7 @@
 - `src/routes/challenges.ts` и `src/services/pvp.ts` — PvP 1×1 по заявкам: `GET /api/challenges`, `POST /api/challenges` (создать), `POST /api/challenges/:id/cancel`, `POST /api/challenges/:id/join` (бой начинается сразу). Страница `/pvp`. Создатель заявки играет сторону `player`, соперник — сторону `bot` (`battles.opponent_hero_id`), каждому бой показывается от его лица. Таймер хода 30 с (`battles.turn_deadline`), фоновая проверка каждые 2 с завершает просроченные ходы и удаляет заявки старше 10 минут. Обновления приходят через WebSocket чата (`challenges`, `battle`, `battle-start`). Цифры в `PVP_RULES`.
 - `src/routes/players.ts` — `GET /api/online` (число игроков онлайн, без входа) и `GET /api/heroes/:name` (профиль чужого героя, страница `/heroes/:name`).
 - `docs/wiki/*.md` и `docs/CHANGELOG.md` — описание игры и журнал изменений для игроков, страница `/wiki` (открыта без входа, API `GET /api/wiki`, `GET /api/wiki/:slug`). Правила обновления — в `CLAUDE.md`.
+- `design/` — графика от дизайнера: исходники, 3D, шрифты и готовые картинки в `design/export/` (в игру копируются в `public/img/`). Что куда класть — в `design/README.md`. Тяжёлые исходники (`.psd`, `.blend` и т.п.) идут через Git LFS, см. `.gitattributes`.
 - `public/` — страницы `/login`, `/hero` и `/battle` (обычный HTML + JS, без фреймворка).
 
 ## Как устроен бой

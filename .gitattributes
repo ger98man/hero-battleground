@@ -1,0 +1,26 @@
+# Тяжёлые исходники дизайнера храним через Git LFS (только в папке design/).
+# Готовые картинки для игры (public/img) остаются обычными файлами git.
+design/**/*.psd   filter=lfs diff=lfs merge=lfs -text
+design/**/*.psb   filter=lfs diff=lfs merge=lfs -text
+design/**/*.kra   filter=lfs diff=lfs merge=lfs -text
+design/**/*.procreate filter=lfs diff=lfs merge=lfs -text
+design/**/*.ai    filter=lfs diff=lfs merge=lfs -text
+design/**/*.fig   filter=lfs diff=lfs merge=lfs -text
+design/**/*.sketch filter=lfs diff=lfs merge=lfs -text
+design/**/*.xd    filter=lfs diff=lfs merge=lfs -text
+design/**/*.tif   filter=lfs diff=lfs merge=lfs -text
+design/**/*.tiff  filter=lfs diff=lfs merge=lfs -text
+design/**/*.blend filter=lfs diff=lfs merge=lfs -text
+design/**/*.fbx   filter=lfs diff=lfs merge=lfs -text
+design/**/*.obj   filter=lfs diff=lfs merge=lfs -text
+design/**/*.glb   filter=lfs diff=lfs merge=lfs -text
+design/**/*.gltf  filter=lfs diff=lfs merge=lfs -text
+design/**/*.max   filter=lfs diff=lfs merge=lfs -text
+design/**/*.ma    filter=lfs diff=lfs merge=lfs -text
+design/**/*.mb    filter=lfs diff=lfs merge=lfs -text
+design/**/*.ztl   filter=lfs diff=lfs merge=lfs -text
+design/**/*.spp   filter=lfs diff=lfs merge=lfs -text
+design/**/*.aep   filter=lfs diff=lfs merge=lfs -text
+design/**/*.mp4   filter=lfs diff=lfs merge=lfs -text
+design/**/*.mov   filter=lfs diff=lfs merge=lfs -text
+design/**/*.zip   filter=lfs diff=lfs merge=lfs -text
